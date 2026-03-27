@@ -26,7 +26,7 @@
 # TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-function ls($args = []) {
+function ls($args = [], $flags = []) {
     $files = array();
     $folders = array();
     
@@ -48,7 +48,7 @@ function ls($args = []) {
     if(!empty($files)){
         foreach ($files as $name => $path) {
             if ($path === false) {
-                echo "ls: cannot access '$name': No such file or directory";
+                echo "ls: cannot access '$name': No such file or directory<br>";
                 continue;
             }
 
@@ -69,11 +69,13 @@ function ls($args = []) {
 
         foreach ($folders as $name => $path) {
             if ($path === false) {
-                echo "ls: cannot access '$name': No such file or directory";
+                echo "ls: cannot access '$name': No such file or directory<br>";
                 continue;
             }
 
-            echo "<b>$name</b>:<br>";
+            if ($name !== '.' || count($folders) > 1) {
+                echo "$name:<br>";
+            }
 
             $files = scandir($path);
 
