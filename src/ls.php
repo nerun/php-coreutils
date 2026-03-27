@@ -44,19 +44,28 @@ function ls($args = [], $flags = []) {
             }
         }
     }
+    
+    function pathFalse($path, $name) {
+        if ($path === false) {
+            echo "ls: cannot access '$name': No such file or directory<br>";
+            return true;
+        }
+        return false;
+    }
+    
+    function printName($name) {
+        if (strpos($name, ' ') !== false) {
+            echo "'" . $name . "'";
+        } else {
+            echo $name;
+        }
+        echo "<br>";
+    }
 
     if(!empty($files)){
         foreach ($files as $name => $path) {
-            if ($path === false) {
-                echo "ls: cannot access '$name': No such file or directory<br>";
-                continue;
-            }
-
-            if (strpos($name, ' ') !== false) {
-                echo "'" . $name . "'" . "<br>";
-            } else {
-                echo $name . "<br>";
-            }
+            if (pathFalse($path, $name)) continue;
+            printName($name);
         }
     }
 
@@ -68,30 +77,17 @@ function ls($args = [], $flags = []) {
         $last = array_key_last($folders);
 
         foreach ($folders as $name => $path) {
-            if ($path === false) {
-                echo "ls: cannot access '$name': No such file or directory<br>";
-                continue;
-            }
+            if (pathFalse($path, $name)) continue;
 
-            if ($name !== '.' || count($folders) > 1) {
-                echo "$name:<br>";
-            }
+            if (!($name === '.' && count($folders) === 1)) echo "$name:<br>";
 
             $files = scandir($path);
 
             foreach ($files as $file) {
-                if ($file != '.' && $file != '..') {
-                    if (strpos($file, ' ') !== false) {
-                        echo "'" . $file . "'" . "<br>";
-                    } else {
-                        echo $file . "<br>";
-                    }
-                }
+                if ($file != '.' && $file != '..') printName($file);
             }
             
-            if ($name !== $last) {
-                echo "<br>";
-            }
+            if ($name !== $last) echo "<br>";
         }
     }
 }
