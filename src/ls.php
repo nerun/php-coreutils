@@ -26,68 +26,89 @@
 # TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+// ====== Bootstrap ======
+
+require_once __DIR__ . '/lib/locale.php';
+
+$currentLocale = setAppLocale();
+setlocale(LC_COLLATE, $currentLocale);
+
+// ====== Auxiliary functions ======
+
+function printError($name) {
+    echo "ls: cannot access '$name': No such file or directory<br>";
+}
+
+function printName($name) {
+    if (strpos($name, ' ') !== false) {
+        echo "'$name'";
+    } else {
+        echo $name;
+    }
+    echo "<br>";
+}
+
+function listDirectory($path, $flags = []) {
+    $items = scandir($path);
+
+    usort($items, 'strcoll');
+
+    $showHidden = in_array('a', $flags);
+
+    foreach ($items as $item) {
+        if (!$showHidden && $item[0] === '.') continue;
+        printName($item);
+    }
+}
+
+// ====== Main logic ======
+
 function ls($args = [], $flags = []) {
-    $files = array();
-    $folders = array();
-    
+    $files = [];
+    $folders = [];
+
     if (empty($args)) {
         $folders['.'] = $_SESSION['cwd'];
     } else {
-        foreach ($args as $item_to_scan) {
-            $rp = realpath($_SESSION['cwd'] . DIRECTORY_SEPARATOR . $item_to_scan);
-            // realpath() resolve path -> if exist return -> string
-            //                         -> if not   return -> bool(false)
+        foreach ($args as $item) {
+            $rp = realpath($_SESSION['cwd'] . DIRECTORY_SEPARATOR . $item);
+
+            if ($rp === false) {
+                printError($item);
+                continue;
+            }
+
             if (is_dir($rp)) {
-                $folders[$item_to_scan] = $rp;
+                $folders[$item] = $rp;
             } else {
-                $files[$item_to_scan] = $rp;
+                $files[$item] = $rp;
             }
         }
     }
-    
-    function pathFalse($path, $name) {
-        if ($path === false) {
-            echo "ls: cannot access '$name': No such file or directory<br>";
-            return true;
-        }
-        return false;
-    }
-    
-    function printName($name) {
-        if (strpos($name, ' ') !== false) {
-            echo "'" . $name . "'";
-        } else {
-            echo $name;
-        }
-        echo "<br>";
-    }
 
-    if(!empty($files)){
+    if (!empty($files)) {
         foreach ($files as $name => $path) {
-            if (pathFalse($path, $name)) continue;
             printName($name);
         }
     }
 
-    if(!empty($folders)) {
-        if(!empty($files)){
+    if (!empty($folders)) {
+        if (!empty($files)) {
             echo "<br>";
         }
-        
+
         $last = array_key_last($folders);
 
         foreach ($folders as $name => $path) {
-            if (pathFalse($path, $name)) continue;
-
-            if (!($name === '.' && count($folders) === 1)) echo "$name:<br>";
-
-            $files = scandir($path);
-
-            foreach ($files as $file) {
-                if ($file != '.' && $file != '..') printName($file);
+            if (count($folders) > 1) {
+                echo "$name:<br>";
             }
-            
-            if ($name !== $last) echo "<br>";
+
+            listDirectory($path, $flags);
+
+            if ($name !== $last) {
+                echo "<br>";
+            }
         }
     }
 }
