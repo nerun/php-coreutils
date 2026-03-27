@@ -67,9 +67,9 @@ $count = wc(
 
 The project focuses on core utilities such as:
 
-* File operations (`ls`, `cp`, `mv`, `rm`)
-* Text processing (`cat`, `grep`, `head`, `tail`, `wc`)
-* Basic utilities (`echo`, `pwd`, etc.)
+* File operations (`ls`, `cp`, `mv`, `rm`, etc.)
+* Text processing (`cat`, `grep`, `head`, `tail`, `wc`, etc.)
+* Shell built-in (`echo`, `cd`, `print`, `pwd`, etc.)
 
 The goal is not to achieve full parity with system implementations, but to
 provide practical and predictable behavior.
