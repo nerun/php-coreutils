@@ -74,9 +74,23 @@ function parseCommand($input) {
 
     $flags = [];
     $args = [];
+    $longFlags = [];
+    $endOfOptions = false;
 
     foreach ($tokens as $token) {
-        if (strpos($token, '-') === 0 && strlen($token) > 1) {
+        if ($endOfOptions) {
+            $args[] = $token;
+            continue;
+        }
+
+        if ($token === '--') {
+            $endOfOptions = true;
+            continue;
+        }
+
+        if (strpos($token, '--') === 0 && strlen($token) > 2) {
+            $longFlags[] = substr($token, 2);
+        } elseif (strpos($token, '-') === 0 && strlen($token) > 1) {
             $flags = array_merge($flags, str_split(substr($token, 1)));
         } else {
             $args[] = $token;
@@ -86,6 +100,7 @@ function parseCommand($input) {
     return [
         'command' => $command,
         'flags' => $flags,
+        'longFlags' => $longFlags,
         'args' => $args
     ];
 }
