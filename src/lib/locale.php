@@ -33,6 +33,10 @@
  * 
  * $currentLocale = setAppLocale();
  * setlocale(LC_COLLATE, $currentLocale);
+ * setlocale(LC_TIME, $currentLocale);
+ *
+ * or (avoid this):
+ * setlocale(LC_ALL, $currentLocale);
  */
 
 function setAppLocale($locale = null) {
