@@ -32,11 +32,23 @@
  * require_once __DIR__ . '/lib/locale.php';
  * 
  * $currentLocale = setAppLocale();
- * setlocale(LC_COLLATE, $currentLocale);
- * setlocale(LC_TIME, $currentLocale);
  *
- * or (avoid this):
+ * avoid LC_ALL:
  * setlocale(LC_ALL, $currentLocale);
+ * 
+ * you should prefer one or more of these:
+ * LC_CTYPE
+ * LC_NUMERIC
+ * LC_TIME
+ * LC_COLLATE
+ * LC_MONETARY
+ * LC_MESSAGES
+ * LC_PAPER
+ * LC_NAME
+ * LC_ADDRESS
+ * LC_TELEPHONE
+ * LC_MEASUREMENT
+ * LC_IDENTIFICATION
  */
 
 function setAppLocale($locale = null) {

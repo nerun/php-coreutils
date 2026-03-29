@@ -28,14 +28,9 @@
 
 // ====== Bootstrap ======
 
-require_once __DIR__ . '/lib/locale.php';
-
-$currentLocale = setAppLocale();
-setlocale(LC_COLLATE, $currentLocale);
-setlocale(LC_TIME, $currentLocale);
-
 $rows = [];
-$validOptions = ['a', 'l'];
+$st_blocks = 0;
+$validOptions = ['a', 'h', 'l', 'all', 'human-readable', 'group-directories-first'];
 const ERR_NO_SUCH_FILE = 0;
 const ERR_INVALID_OPTION = 1;
 
@@ -44,17 +39,18 @@ const ERR_INVALID_OPTION = 1;
 function printError($error, $name) {
     switch ($error) {
         case 0:
-            echo "ls: cannot access '$name': No such file or directory<br>";
+            echo "<br>ls: cannot access '$name': No such file or directory<br>";
             break;
         case 1:
-            echo "ls: invalid option -- '$name'<br>";
+            echo "<br>ls: invalid option -- '$name'<br>";
             echo "Try 'ls --help' for more information.<br>";
             break;
     }
 }
 
-function printName($name, $path, $flags = []) {
+function printName($name, $path, $flags = [], $longFlags = []) {
     global $rows;
+    global $st_blocks;
     
     if (strpos($name, ' ') !== false) {
         $name = "'$name'";
@@ -67,16 +63,22 @@ function printName($name, $path, $flags = []) {
         $user = posix_getpwuid($stat['uid'])['name'];
         $group = posix_getgrgid($stat['gid'])['name'];
         $mtime = strftime("%b %d %Y %H:%M", filemtime($path));
+        
+        $size = (in_array('h', $flags) || in_array('human-readable', $longFlags))
+            ? humanSize($stat['size'])
+            : $stat['size'];
 
         $rows[] = [
             'perms' => symbolicPerms($path),
             'nlink' => $stat['nlink'],
             'user' => $user,
             'group' => $group,
-            'size' => $stat['size'],
+            'size' => $size,
             'date' => $mtime,
             'name' => $name
         ];
+        
+        $st_blocks += $stat['blocks'];
     } else {
        $rows[] = $name;
     }
@@ -98,7 +100,7 @@ function printList($flags = []) {
         }
     }
 
-    echo "<pre>";
+    echo "<pre style=\"margin: 0;\">";
     
     foreach ($rows as $r) {
         if ($longListing && is_array($r)) {
@@ -120,18 +122,52 @@ function printList($flags = []) {
     echo "</pre>";
 }
 
-function listDirectory($path, $flags = []) {
+function listDirectory($path, $flags = [], $longFlags = []) {
     $items = scandir($path);
+
+    $showHidden = in_array('a', $flags) || in_array('all', $longFlags);
+
+    $items = array_filter($items, function ($item) use ($showHidden) {
+        return $showHidden || $item[0] !== '.';
+    });
 
     usort($items, 'strcoll');
 
-    $showHidden = in_array('a', $flags);
+    if (in_array('group-directories-first', $longFlags)) {
+        $dirs = [];
+        $files = [];
+
+        foreach ($items as $item) {
+            $fullpath = $path . DIRECTORY_SEPARATOR . $item;
+
+            if (is_dir($fullpath)) {
+                $dirs[] = $item;
+            } else {
+                $files[] = $item;
+            }
+        }
+
+        $items = array_merge($dirs, $files);
+    }
 
     foreach ($items as $item) {
-        if (!$showHidden && $item[0] === '.') continue;
         $fullpath = $path . DIRECTORY_SEPARATOR . $item;
-        printName($item, $fullpath, $flags);
+        printName($item, $fullpath, $flags, $longFlags);
     }
+}
+
+function humanSize($bytes) {
+    $units = ['', 'K', 'M', 'G', 'T', 'P'];
+
+    $i = 0;
+    while ($bytes >= 1024 && $i < count($units) - 1) {
+        $bytes /= 1024;
+        $i++;
+    }
+
+    return ($bytes >= 10)
+        ? sprintf("%.0f%s", $bytes, $units[$i])
+        : sprintf("%.1f%s", $bytes, $units[$i]);
 }
 
 function symbolicPerms($path){
@@ -175,13 +211,14 @@ function symbolicPerms($path){
 
 function ls($args = [], $longFlags = [], $flags = []) {
     global $rows;
+    global $st_blocks;
     global $validOptions;
     $files = [];
     $folders = [];
-    
+    $longListing = in_array('l', $flags);
     $validSet = array_flip($validOptions);
 
-    foreach ($flags as $flag) {
+    foreach (array_merge($flags, $longFlags) as $flag) {
         if (!isset($validSet[$flag])) {
             printError(ERR_INVALID_OPTION, $flag);
             return false;
@@ -209,7 +246,7 @@ function ls($args = [], $longFlags = [], $flags = []) {
 
     if (!empty($files)) {
         foreach ($files as $name => $path) {
-            printName($name, $path, $flags);
+            printName($name, $path, $flags, $longFlags);
         }
     }
 
@@ -223,9 +260,28 @@ function ls($args = [], $longFlags = [], $flags = []) {
         foreach ($folders as $name => $path) {
             if (count($folders) + count($files) > 1) {
                 $rows[] = "$name:";
+                if ($longListing) {
+                    $rows[] = "total __BLOCKS__";
+                }
             }
 
-            listDirectory($path, $flags);
+            listDirectory($path, $flags, $longFlags);
+            
+            if ($longListing) {
+                $total = $st_blocks / 2;
+                if (in_array('h', $flags) || in_array('human-readable', $longFlags)) {
+                    $total = humanSize($total * 1024);
+                }
+
+                foreach ($rows as &$row) {
+                    if (is_string($row)) {
+                        $row = str_replace('__BLOCKS__', $total, $row);
+                    }
+                }
+                unset($row);
+
+                $st_blocks = 0;
+            }
 
             if ($name !== $last) {
                 $rows[] = '';
