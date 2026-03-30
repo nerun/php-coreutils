@@ -30,7 +30,8 @@
 
 $rows = [];
 $st_blocks = 0;
-$validOptions = ['a', 'h', 'l', 'all', 'human-readable', 'group-directories-first'];
+$validOptions = ['a', 'g', 'G', 'h', 'l', 'o',
+                 'all', 'group-directories-first', 'human-readable', 'si'];
 const ERR_NO_SUCH_FILE = 0;
 const ERR_INVALID_OPTION = 1;
 
@@ -64,8 +65,11 @@ function printName($name, $path, $flags = [], $longFlags = []) {
         $group = posix_getgrgid($stat['gid'])['name'];
         $mtime = strftime("%b %d %Y %H:%M", filemtime($path));
         
-        $size = (in_array('h', $flags) || in_array('human-readable', $longFlags))
-            ? humanSize($stat['size'])
+        $human = in_array('h', $flags) || in_array('human-readable', $longFlags);
+        $useSI = in_array('si', $longFlags);
+                
+        $size = ($human || $useSI)
+            ? humanSize($stat['size'], $useSI)
             : $stat['size'];
 
         $rows[] = [
@@ -104,16 +108,33 @@ function printList($flags = []) {
     
     foreach ($rows as $r) {
         if ($longListing && is_array($r)) {
-            printf(
-                "%-10s %2s %-{$maxUser}s %-{$maxGroup}s %{$maxSize}s %s  %s<br>",
+            $showOwner = !in_array('g', $flags); // -g hide owner
+            $showGroup = !in_array('G', $flags); // -G hide group
+
+            $format = "%-10s %2s";
+
+            $args = [
                 $r['perms'],
-                $r['nlink'],
-                $r['user'],
-                $r['group'],
-                $r['size'],
-                $r['date'],
-                $r['name']
-            );
+                $r['nlink']
+            ];
+
+            if ($showOwner) {
+                $format .= " %-{$maxUser}s";
+                $args[] = $r['user'];
+            }
+
+            if ($showGroup) {
+                $format .= " %-{$maxGroup}s";
+                $args[] = $r['group'];
+            }
+
+            $format .= " %{$maxSize}s %s  %s<br>";
+
+            $args[] = $r['size'];
+            $args[] = $r['date'];
+            $args[] = $r['name'];
+
+            printf($format, ...$args);
         } else {
             printf("%s<br>", $r);
         }
@@ -156,18 +177,22 @@ function listDirectory($path, $flags = [], $longFlags = []) {
     }
 }
 
-function humanSize($bytes) {
-    $units = ['', 'K', 'M', 'G', 'T', 'P'];
+function humanSize($bytes, $useSI = false) {
+    $base = $useSI ? 1000 : 1024;
+    $units = $useSI ? ['','k','M','G','T','P','E'] : ['','K','M','G','T','P','E'];
 
     $i = 0;
-    while ($bytes >= 1024 && $i < count($units) - 1) {
-        $bytes /= 1024;
+    while ($bytes >= $base && $i < count($units) - 1) {
+        $bytes /= $base;
         $i++;
     }
 
-    return ($bytes >= 10)
-        ? sprintf("%.0f%s", $bytes, $units[$i])
-        : sprintf("%.1f%s", $bytes, $units[$i]);
+    // GNU-style rounding
+    if ($bytes >= 10 || floor($bytes) == $bytes) {
+        return sprintf("%.0f%s", $bytes, $units[$i]);
+    }
+
+    return sprintf("%.1f%s", $bytes, $units[$i]);
 }
 
 function symbolicPerms($path){
@@ -217,7 +242,31 @@ function ls($args = [], $longFlags = [], $flags = []) {
     $folders = [];
     $longListing = in_array('l', $flags);
     $validSet = array_flip($validOptions);
+    
+    // Flag '-o' is like -l, but do not list group information
+    // Replaces '-o' with '-l' and '-G', deletes '-o', reindex array $flags
+    if (in_array('o', $flags)) {
+        if (!$longListing) {
+            $flags[] = 'l';
+            $longListing = true;
+        }
+        if (!in_array('G', $flags)) {
+            $flags[] = 'G';
+        }
+        $oKey = array_find_key($flags, function(string $value) { return $value == 'o'; });
+        unset($flags[$oKey]);
+        $flags = array_values($flags);
+    }
 
+    // Flag '-g' is like '-l', but do not list owner
+    // Insert the '-l' flag into the array, if not, and set $longListing to true.
+    if (in_array('g', $flags)) {
+        if (!$longListing) {
+            $flags[] = 'l';
+            $longListing = true;
+        }
+    }
+    
     foreach (array_merge($flags, $longFlags) as $flag) {
         if (!isset($validSet[$flag])) {
             printError(ERR_INVALID_OPTION, $flag);
@@ -269,8 +318,12 @@ function ls($args = [], $longFlags = [], $flags = []) {
             
             if ($longListing) {
                 $total = $st_blocks / 2;
-                if (in_array('h', $flags) || in_array('human-readable', $longFlags)) {
-                    $total = humanSize($total * 1024);
+                
+                $human = in_array('h', $flags) || in_array('human-readable', $longFlags);
+                $useSI = in_array('si', $longFlags);
+                
+                if ($human || $useSI) {
+                    $total = humanSize($total * 1024, $useSI);
                 }
 
                 foreach ($rows as &$row) {
