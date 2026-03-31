@@ -67,3 +67,8 @@ function setAppLocale($locale = null) {
 
     return $locale;
 }
+
+define('CURRENT_LOCALE', setAppLocale());
+setlocale(LC_COLLATE, CURRENT_LOCALE);
+setlocale(LC_NUMERIC, CURRENT_LOCALE);
+setlocale(LC_TIME, CURRENT_LOCALE);
