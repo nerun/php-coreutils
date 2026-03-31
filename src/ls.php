@@ -28,26 +28,12 @@
 
 // ====== Bootstrap ======
 
+require_once __DIR__ . '/lib/locale.php';
+require_once __DIR__ . '/lib/errorHandling.php';
 $rows = [];
 $st_blocks = 0;
-$validOptions = ['a', 'g', 'G', 'h', 'l', 'o',
-                 'all', 'group-directories-first', 'human-readable', 'si'];
-const ERR_NO_SUCH_FILE = 0;
-const ERR_INVALID_OPTION = 1;
 
 // ====== Auxiliary functions ======
-
-function printError($error, $name) {
-    switch ($error) {
-        case 0:
-            echo "<br>ls: cannot access '$name': No such file or directory<br>";
-            break;
-        case 1:
-            echo "<br>ls: invalid option -- '$name'<br>";
-            echo "Try 'ls --help' for more information.<br>";
-            break;
-    }
-}
 
 function printName($name, $path, $flags = [], $longFlags = []) {
     global $rows;
@@ -63,7 +49,18 @@ function printName($name, $path, $flags = [], $longFlags = []) {
         $stat = stat($path);
         $user = posix_getpwuid($stat['uid'])['name'];
         $group = posix_getgrgid($stat['gid'])['name'];
-        $mtime = strftime("%b %d %Y %H:%M", filemtime($path));
+        //$mtime = strftime("%b %d %Y %H:%M", filemtime($path));
+
+        $formatter = new IntlDateFormatter(
+            CURRENT_LOCALE,
+            IntlDateFormatter::MEDIUM,
+            IntlDateFormatter::SHORT,
+            date_default_timezone_get(),
+            IntlDateFormatter::GREGORIAN,
+            "MMM dd yyyy HH:mm"
+        );
+        $mtime = $formatter->format(filemtime($path));
+        $mtime = preg_replace('/^(\p{L}+)\./u', '$1', $mtime); // remove dot after month
         
         $human = in_array('h', $flags) || in_array('human-readable', $longFlags);
         $useSI = in_array('si', $longFlags);
@@ -104,7 +101,7 @@ function printList($flags = []) {
         }
     }
 
-    echo "<pre style=\"margin: 0;\">";
+    echo '<pre style="margin: 0;">';
     
     foreach ($rows as $r) {
         if ($longListing && is_array($r)) {
@@ -235,14 +232,16 @@ function symbolicPerms($path){
 // ====== Main logic ======
 
 function ls($args = [], $longFlags = [], $flags = []) {
+    $validOptions = ['a', 'g', 'G', 'h', 'l', 'o',
+                     'all', 'group-directories-first', 'human-readable', 'si'];
+    if(!validateOptions('ls', $validOptions, $flags, $longFlags)) return;
+    
     global $rows;
     global $st_blocks;
-    global $validOptions;
     $files = [];
     $folders = [];
     $longListing = in_array('l', $flags);
-    $validSet = array_flip($validOptions);
-    
+
     // Flag '-o' is like -l, but do not list group information
     // Replaces '-o' with '-l' and '-G', deletes '-o', reindex array $flags
     if (in_array('o', $flags)) {
@@ -267,13 +266,6 @@ function ls($args = [], $longFlags = [], $flags = []) {
         }
     }
     
-    foreach (array_merge($flags, $longFlags) as $flag) {
-        if (!isset($validSet[$flag])) {
-            printError(ERR_INVALID_OPTION, $flag);
-            return false;
-        }
-    }
-
     if (empty($args)) {
         $folders['.'] = $_SESSION['cwd'];
     } else {
@@ -281,7 +273,7 @@ function ls($args = [], $longFlags = [], $flags = []) {
             $rp = realpath($_SESSION['cwd'] . DIRECTORY_SEPARATOR . $item);
 
             if ($rp === false) {
-                printError(ERR_NO_SUCH_FILE, $item);
+                printError('ls', ERR_NO_SUCH_FILE, $item);
                 continue;
             }
 
@@ -343,4 +335,7 @@ function ls($args = [], $longFlags = [], $flags = []) {
     }
     
     printList($flags);
+    
+    $rows = [];
+    $st_blocks = 0;
 }
