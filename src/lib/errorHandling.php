@@ -31,7 +31,9 @@
 define('ERR_NO_SUCH_FILE', 0);   // ls
 define('ERR_INVALID_OPTION', 1); // ls, mkdir
 define('ERR_FILE_EXISTS', 2);    // mkdir
-define('ERR_CANNOT_CREATE', 3);  // mkdir
+define('ERR_PERM_DENIED', 3);    // mkdir
+define('ERR_NO_SUCH_PATH', 4);   // mkdir
+define('ERR_INVALID_MODE', 5);   // mkdir
 
 // ====== Auxiliary functions ======
 
@@ -50,6 +52,12 @@ function printError($command, $error, $name) {
         case 3: // mkdir
             echo "$command: cannot create directory '$name': Permission denied";
             break;
+        case 4: // mkdir
+            echo "$command: cannot create directory '$name': No such file or directory";
+            break;
+        case 5: // mkdir
+            echo "$command: invalid mode '$name'";
+            break;
         default:
             echo '<span style="color:red">No such error!</span>';
             break;
@@ -58,10 +66,16 @@ function printError($command, $error, $name) {
     echo '<br>';
 }
 
-function validateOptions($command, $validOptions, $flags, $longFlags) {
+function validateOptions($command, $validOptions, $flags, $longFlags, $flagsWithValue) {
     $validSet = array_flip($validOptions);
-    
-    foreach (array_merge($flags, $longFlags) as $flag) {
+
+    $merge = array_merge($flags, $longFlags);
+
+    foreach ($flagsWithValue as $key => $value) {
+        $merge[] = $key;
+    }
+
+    foreach ($merge as $flag) {
         if (!isset($validSet[$flag])) {
             printError($command, ERR_INVALID_OPTION, $flag);
             return false;

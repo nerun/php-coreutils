@@ -231,10 +231,16 @@ function symbolicPerms($path){
 
 // ====== Main logic ======
 
-function ls($args = [], $longFlags = [], $flags = []) {
+function ls($input) {
+    //$command = $input['command']; // always 'ls' here
+    $flags = $input['flags'];
+    $longFlags = $input['longFlags'];
+    $flagsWithValue = $input['flagsWithValue']; // not used in this version
+    $args = $input['args'];
+
     $validOptions = ['a', 'g', 'G', 'h', 'l', 'o',
                      'all', 'group-directories-first', 'human-readable', 'si'];
-    if(!validateOptions('ls', $validOptions, $flags, $longFlags)) return;
+    if(!validateOptions('ls', $validOptions, $flags, $longFlags, $flagsWithValue)) return;
     
     global $rows;
     global $st_blocks;
