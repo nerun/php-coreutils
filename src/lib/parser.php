@@ -73,11 +73,14 @@ function parseCommand($input) {
     $command = array_shift($tokens);
 
     $flags = [];
-    $args = [];
     $longFlags = [];
+    $flagsWithValue = [];
+    $args = [];
     $endOfOptions = false;
 
-    foreach ($tokens as $token) {
+    for ($i = 0; $i < count($tokens); $i++) {
+        $token = $tokens[$i];
+
         if ($endOfOptions) {
             $args[] = $token;
             continue;
@@ -88,10 +91,44 @@ function parseCommand($input) {
             continue;
         }
 
+        // long options
         if (strpos($token, '--') === 0 && strlen($token) > 2) {
-            $longFlags[] = substr($token, 2);
+            $opt = substr($token, 2);
+
+            // --mode=775
+            if (strpos($opt, '=') !== false) {
+                [$name, $value] = explode('=', $opt, 2);
+                $flagsWithValue[$name] = $value;
+            } else {
+                // --mode 775
+                if ($opt === 'mode') {
+                    $i++;
+                    $flagsWithValue['mode'] = $tokens[$i] ?? null;
+                } else {
+                    $longFlags[] = $opt;
+                }
+            }
+
+        // short options
         } elseif (strpos($token, '-') === 0 && strlen($token) > 1) {
-            $flags = array_merge($flags, str_split(substr($token, 1)));
+            $chars = str_split(substr($token, 1));
+
+            foreach ($chars as $j => $flag) {
+                if ($flag === 'm') {
+                    // -m 775
+                    if ($j === count($chars) - 1) {
+                        $i++;
+                        $flagsWithValue['m'] = $tokens[$i] ?? null;
+                    } else {
+                        // -m775
+                        $flagsWithValue['m'] = substr($token, $j + 2);
+                        break;
+                    }
+                } else {
+                    $flags[] = $flag;
+                }
+            }
+
         } else {
             $args[] = $token;
         }
@@ -101,6 +138,7 @@ function parseCommand($input) {
         'command' => $command,
         'flags' => $flags,
         'longFlags' => $longFlags,
+        'flagsWithValue' => $flagsWithValue,
         'args' => $args
     ];
 }
