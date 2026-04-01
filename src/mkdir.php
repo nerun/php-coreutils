@@ -36,21 +36,57 @@ require_once __DIR__ . '/lib/errorHandling.php';
 
 // ====== Main logic ======
 
-function _mkdir($args = [], $longFlags = [], $flags = []) {
-    $validOptions = ['p'];
-    if(!validateOptions('mkdir', $validOptions, $flags, $longFlags)) return;
+function _mkdir($input) {
+    //$command = $input['command']; // always 'mkdir' here
+    $flags = $input['flags'];
+    $longFlags = $input['longFlags'];
+    $flagsWithValue = $input['flagsWithValue'];
+    $args = $input['args'];
     
+    $validOptions = ['m', 'p', 'mode'];
+    if (!validateOptions('mkdir', $validOptions, $flags, $longFlags, $flagsWithValue)) return;
+
     $recursive = in_array('p', $flags);
     
+    $mode = $flagsWithValue['m'] ?? $flagsWithValue['mode'] ?? null;
+
+    if ($mode !== null) {
+        // accepts only octal, 3 or 4 digits, but GNU mkdir also accepts symbolic formats
+        // (like u=rwx, g=rx, o=rx) — which has not yet been implemented.
+        if (!preg_match('/^[0-7]{3,4}$/', $mode)) {
+            printError('mkdir', ERR_INVALID_MODE, $mode);
+        }
+
+        $mode = octdec($mode);
+    } else {
+        $mode = 0775;
+    }
+
     foreach ($args as $arg) {
-        $old = umask(0002); // $old = old umask = 0022, umask sets to 0002
-        if (!@mkdir($arg, 0775, $recursive)) {
+        if (@mkdir($arg, $mode, $recursive)) {
+            if (!chmod($arg, $mode)) {
+                printError('mkdir', ERR_PERM_DENIED, $arg);
+            }
+        } else {
+            // -p: if the directory already exists, it's not an error
+            if ($recursive && is_dir($arg)) {
+                continue;
+            }
+
             if (file_exists($arg)) {
                 printError('mkdir', ERR_FILE_EXISTS, $arg);
             } else {
-                printError('mkdir', ERR_CANNOT_CREATE, $arg);
+                $parent = dirname($arg);
+
+                if (!is_dir($parent)) {
+                    printError('mkdir', ERR_NO_SUCH_PATH, $arg);
+                } elseif (!is_writable($parent)) {
+                    printError('mkdir', ERR_PERM_DENIED, $arg);
+                } else {
+                    // fallback (rare, but safe)
+                    printError('mkdir', ERR_PERM_DENIED, $arg);
+                }
             }
         }
-        umask($old); // restores umask 0022
     }
 }
