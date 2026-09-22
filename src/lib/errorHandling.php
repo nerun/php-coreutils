@@ -26,61 +26,44 @@
 # TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-// ====== Bootstrap ======
-
-define('ERR_NO_SUCH_FILE', 0);   // ls
-define('ERR_INVALID_OPTION', 1); // ls, mkdir
-define('ERR_FILE_EXISTS', 2);    // mkdir
-define('ERR_PERM_DENIED', 3);    // mkdir
-define('ERR_NO_SUCH_PATH', 4);   // mkdir
-define('ERR_INVALID_MODE', 5);   // mkdir
-
-// ====== Auxiliary functions ======
-
-function printError($command, $error, $name) {
-    switch ($error) {
-        case 0: // ls
-            echo "$command: cannot access '$name': No such file or directory";
-            break;
-        case 1: // ls, mkdir
-            echo "$command: invalid option -- '$name'";
-            echo "<br>Try '$command --help' for more information.";
-            break;
-        case 2: // mkdir
-            echo "$command: cannot create directory '$name': File exists";
-            break;
-        case 3: // mkdir
-            echo "$command: cannot create directory '$name': Permission denied";
-            break;
-        case 4: // mkdir
-            echo "$command: cannot create directory '$name': No such file or directory";
-            break;
-        case 5: // mkdir
-            echo "$command: invalid mode '$name'";
-            break;
-        default:
-            echo '<span style="color:red">No such error!</span>';
-            break;
-    }
-    
-    echo '<br>';
+/** Build an error without producing output. */
+function coreutilsError(string $command, string $code, string $message, ?string $path = null): array {
+    return ['code' => $code, 'message' => $command . ': ' . $message, 'path' => $path];
 }
 
-function validateOptions($command, $validOptions, $flags, $longFlags, $flagsWithValue) {
-    $validSet = array_flip($validOptions);
+function coreutilsResult(string $command, array $data = []): array {
+    return [
+        'command' => $command,
+        'status' => 0,
+        'data' => $data,
+        'errors' => [],
+        'options' => [],
+        'help' => null,
+    ];
+}
 
-    $merge = array_merge($flags, $longFlags);
+function coreutilsAddError(array &$result, array $error, int $status = 1): void {
+    $result['errors'][] = $error;
+    $result['status'] = max($result['status'], $status);
+}
 
-    foreach ($flagsWithValue as $key => $value) {
-        $merge[] = $key;
+/** Capture filesystem warnings locally; always restore the caller's handler. */
+function coreutilsFsCall(callable $operation, ?string &$warning = null) {
+    $warning = null;
+    set_error_handler(function ($severity, $message) use (&$warning) {
+        $warning = $message;
+        return true;
+    }, E_WARNING);
+    try {
+        return $operation();
+    } finally {
+        restore_error_handler();
     }
+}
 
-    foreach ($merge as $flag) {
-        if (!isset($validSet[$flag])) {
-            printError($command, ERR_INVALID_OPTION, $flag);
-            return false;
-        }
-    }
-    
-    return true;
+function coreutilsFsError(string $command, string $operation, string $path, ?string $warning): array {
+    // Keep the actual diagnostic; do not label every failure "Permission denied".
+    $detail = $warning === null ? 'Operation failed' : preg_replace('/^[^:]+\(\):\s*/', '', $warning);
+    return coreutilsError($command, 'filesystem-error',
+        "cannot $operation '$path': $detail", $path);
 }

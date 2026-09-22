@@ -26,49 +26,46 @@
 # TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-/* Usage:
- * '/lib/locale.php' is the correct path if the script that calls it is located in /src.
- * 
- * require_once __DIR__ . '/lib/locale.php';
- * 
- * $currentLocale = setAppLocale();
- *
- * avoid LC_ALL:
- * setlocale(LC_ALL, $currentLocale);
- * 
- * you should prefer one or more of these:
- * LC_CTYPE
- * LC_NUMERIC
- * LC_TIME
- * LC_COLLATE
- * LC_MONETARY
- * LC_MESSAGES
- * LC_PAPER
- * LC_NAME
- * LC_ADDRESS
- * LC_TELEPHONE
- * LC_MEASUREMENT
- * LC_IDENTIFICATION
- */
-
-function setAppLocale($locale = null) {
-    if ($locale === null && isset($_SERVER['HTTP_ACCEPT_LANGUAGE'])) {
-        $locale = locale_accept_from_http($_SERVER['HTTP_ACCEPT_LANGUAGE']);
+/** Locale helpers have no process-wide side effects. intl is optional. */
+function coreutilsCollator(?string $locale) {
+    if ($locale === null || $locale === 'C' || $locale === 'POSIX' || !class_exists('Collator')) {
+        return null;
     }
-
-    if ($locale) {
-        $locale = str_replace('-', '_', $locale) . '.UTF-8';
+    try {
+        return new Collator($locale);
+    } catch (Throwable $error) {
+        return null;
     }
-
-    if (!$locale || !setlocale(LC_COLLATE, $locale)) {
-        $locale = 'C';
-        setlocale(LC_COLLATE, $locale);
-    }
-
-    return $locale;
 }
 
-define('CURRENT_LOCALE', setAppLocale());
-setlocale(LC_COLLATE, CURRENT_LOCALE);
-setlocale(LC_NUMERIC, CURRENT_LOCALE);
-setlocale(LC_TIME, CURRENT_LOCALE);
+function coreutilsCompare(string $left, string $right, $collator = null): int {
+    $comparison = $collator === null ? false : $collator->compare($left, $right);
+    return $comparison === false ? strcmp($left, $right) : $comparison;
+}
+
+function coreutilsDateFormatter(?string $locale) {
+    if (!class_exists('IntlDateFormatter')) return null;
+    try {
+        return new IntlDateFormatter(
+            $locale === null || $locale === 'C' || $locale === 'POSIX' ? 'en_US_POSIX' : $locale,
+            IntlDateFormatter::MEDIUM,
+            IntlDateFormatter::SHORT,
+            date_default_timezone_get(),
+            IntlDateFormatter::GREGORIAN,
+            'MMM dd yyyy HH:mm'
+        );
+    } catch (Throwable $error) {
+        return null;
+    }
+}
+
+function coreutilsFormatDate(int $timestamp, $formatter = null): string {
+    if ($formatter !== null) {
+        $formatted = $formatter->format($timestamp);
+        if ($formatted !== false) {
+            return preg_replace('/^(\p{L}+)\./u', '$1', $formatted);
+        }
+    }
+    return (new DateTimeImmutable('@' . $timestamp))
+        ->setTimezone(new DateTimeZone(date_default_timezone_get()))->format('M d Y H:i');
+}

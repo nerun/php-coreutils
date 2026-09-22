@@ -26,322 +26,136 @@
 # TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-// ====== Bootstrap ======
-
+require_once __DIR__ . '/lib/parser.php';
+require_once __DIR__ . '/lib/filesystem.php';
 require_once __DIR__ . '/lib/locale.php';
-require_once __DIR__ . '/lib/errorHandling.php';
-$rows = [];
-$st_blocks = 0;
 
-// ====== Auxiliary functions ======
-
-function printName($name, $path, $flags = [], $longFlags = []) {
-    global $rows;
-    global $st_blocks;
-    
-    if (strpos($name, ' ') !== false) {
-        $name = "'$name'";
+function coreutilsSymbolicPerms(int $mode): string {
+    $types = [0140000 => 's', 0120000 => 'l', 0100000 => '-', 0060000 => 'b',
+        0040000 => 'd', 0020000 => 'c', 0010000 => 'p'];
+    $text = $types[$mode & 0170000] ?? '?';
+    foreach ([[0400, 0200, 0100, 04000, 's', 'S'],
+              [0040, 0020, 0010, 02000, 's', 'S'],
+              [0004, 0002, 0001, 01000, 't', 'T']] as [$r, $w, $x, $special, $on, $off]) {
+        $text .= ($mode & $r) ? 'r' : '-';
+        $text .= ($mode & $w) ? 'w' : '-';
+        $text .= ($mode & $special) ? (($mode & $x) ? $on : $off) : (($mode & $x) ? 'x' : '-');
     }
-    
-    $longListing = in_array('l', $flags);
-
-    if ($longListing) {
-        $stat = stat($path);
-        $user = posix_getpwuid($stat['uid'])['name'];
-        $group = posix_getgrgid($stat['gid'])['name'];
-        //$mtime = strftime("%b %d %Y %H:%M", filemtime($path));
-
-        $formatter = new IntlDateFormatter(
-            CURRENT_LOCALE,
-            IntlDateFormatter::MEDIUM,
-            IntlDateFormatter::SHORT,
-            date_default_timezone_get(),
-            IntlDateFormatter::GREGORIAN,
-            "MMM dd yyyy HH:mm"
-        );
-        $mtime = $formatter->format(filemtime($path));
-        $mtime = preg_replace('/^(\p{L}+)\./u', '$1', $mtime); // remove dot after month
-        
-        $human = in_array('h', $flags) || in_array('human-readable', $longFlags);
-        $useSI = in_array('si', $longFlags);
-                
-        $size = ($human || $useSI)
-            ? humanSize($stat['size'], $useSI)
-            : $stat['size'];
-
-        $rows[] = [
-            'perms' => symbolicPerms($path),
-            'nlink' => $stat['nlink'],
-            'user' => $user,
-            'group' => $group,
-            'size' => $size,
-            'date' => $mtime,
-            'name' => $name
-        ];
-        
-        $st_blocks += $stat['blocks'];
-    } else {
-       $rows[] = $name;
-    }
+    return $text;
 }
 
-function printList($flags = []) {
-    global $rows;
-    $longListing = in_array('l', $flags);
-    
-    if ($longListing) {
-        $maxUser = $maxGroup = $maxSize = 0;
-        
-        foreach ($rows as $r) {
-            if (!is_array($r)) continue;
-            
-            $maxUser = max($maxUser, strlen($r['user']));
-            $maxGroup = max($maxGroup, strlen($r['group']));
-            $maxSize = max($maxSize, strlen($r['size']));
+function coreutilsLsSettings(array $options): array {
+    $size = 'bytes';
+    foreach ($options as $name => $enabled) {
+        if ($enabled && ($name === 'human-readable' || $name === 'si')) $size = $name;
+    }
+    return [
+        'long' => ($options['long'] ?? false) || ($options['omit-owner'] ?? false) || ($options['omit-group'] ?? false),
+        'owner' => !($options['omit-owner'] ?? false),
+        'group' => !(($options['omit-group'] ?? false) || ($options['no-group'] ?? false)),
+        'size' => $size,
+    ];
+}
+
+function coreutilsLsEntry(string $name, string $path, array $stat, array &$result): array {
+    $type = coreutilsSymbolicPerms($stat['mode']);
+    $target = null;
+    if ($type[0] === 'l') {
+        $target = coreutilsFsCall(fn() => readlink($path), $warning);
+        if ($target === false) {
+            coreutilsAddError($result, coreutilsFsError('ls', 'read symbolic link', $name, $warning));
+            $target = null;
         }
     }
+    return [
+        'name' => $name, 'path' => $path, 'permissions' => $type,
+        'mode' => $stat['mode'], 'nlink' => $stat['nlink'],
+        'uid' => $stat['uid'], 'gid' => $stat['gid'],
+        'size' => $stat['size'], 'mtime' => $stat['mtime'],
+        'blocks' => isset($stat['blocks']) && $stat['blocks'] >= 0 ? $stat['blocks'] : null,
+        'target' => $target,
+    ];
+}
 
-    echo '<pre style="margin: 0;">';
-    
-    foreach ($rows as $r) {
-        if ($longListing && is_array($r)) {
-            $showOwner = !in_array('g', $flags); // -g hide owner
-            $showGroup = !in_array('G', $flags); // -G hide group
-
-            $format = "%-10s %2s";
-
-            $args = [
-                $r['perms'],
-                $r['nlink']
-            ];
-
-            if ($showOwner) {
-                $format .= " %-{$maxUser}s";
-                $args[] = $r['user'];
-            }
-
-            if ($showGroup) {
-                $format .= " %-{$maxGroup}s";
-                $args[] = $r['group'];
-            }
-
-            $format .= " %{$maxSize}s %s  %s<br>";
-
-            $args[] = $r['size'];
-            $args[] = $r['date'];
-            $args[] = $r['name'];
-
-            printf($format, ...$args);
+/** Return metadata with raw names and sizes. Presentation is handled by coreutilsText/Html. */
+function ls(array $input, ?string $cwd = null, ?string $locale = null): array {
+    $result = coreutilsResult('ls', ['files' => [], 'directories' => []]);
+    $result['locale'] = $locale;
+    [$options, $args, $errors] = coreutilsValidateInput('ls', $input);
+    $result['options'] = $options;
+    foreach ($errors as $error) coreutilsAddError($result, $error, 2);
+    if ($result['status'] !== 0) return $result;
+    if ($options['help'] ?? false) {
+        $result['help'] = coreutilsHelp('ls');
+        return $result;
+    }
+    $base = coreutilsWorkingDirectory($cwd, $warning);
+    if ($base === false) {
+        coreutilsAddError($result, coreutilsError('ls', 'invalid-cwd', $warning));
+        return $result;
+    }
+    $settings = coreutilsLsSettings($options);
+    $collator = coreutilsCollator($locale);
+    $compare = fn($a, $b) => coreutilsCompare($a['name'], $b['name'], $collator);
+    $directories = [];
+    foreach ($args ?: ['.'] as $arg) {
+        $path = coreutilsResolvePath($arg, $base);
+        $stat = coreutilsLstat($path, $warning);
+        if ($stat === false) {
+            coreutilsAddError($result, coreutilsFsError('ls', 'access', $arg, $warning));
+            continue;
+        }
+        $type = $stat['mode'] & 0170000;
+        $last = substr($path, -1);
+        $trailingSeparator = $last === '/' || (DIRECTORY_SEPARATOR === '\\' && $last === '\\');
+        if ($trailingSeparator && !coreutilsIsDirectory($path)) {
+            coreutilsAddError($result, coreutilsError('ls', 'not-directory', "not a directory: '$arg'", $arg));
+            continue;
+        }
+        if ($type === 0040000 || ($type === 0120000
+            && (!$settings['long'] || $trailingSeparator) && coreutilsIsDirectory($path))) {
+            $directories[] = ['name' => $arg, 'path' => $path];
         } else {
-            printf("%s<br>", $r);
+            $result['data']['files'][] = coreutilsLsEntry($arg, $path, $stat, $result);
         }
     }
-    
-    echo "</pre>";
-}
-
-function listDirectory($path, $flags = [], $longFlags = []) {
-    $items = scandir($path);
-
-    $showHidden = in_array('a', $flags) || in_array('all', $longFlags);
-
-    $items = array_filter($items, function ($item) use ($showHidden) {
-        return $showHidden || $item[0] !== '.';
-    });
-
-    usort($items, 'strcoll');
-
-    if (in_array('group-directories-first', $longFlags)) {
-        $dirs = [];
-        $files = [];
-
-        foreach ($items as $item) {
-            $fullpath = $path . DIRECTORY_SEPARATOR . $item;
-
-            if (is_dir($fullpath)) {
-                $dirs[] = $item;
-            } else {
-                $files[] = $item;
+    usort($result['data']['files'], $compare);
+    usort($directories, $compare);
+    foreach ($directories as $directory) {
+        $group = $directory + ['entries' => [], 'blocks' => 0, 'readable' => true];
+        $items = coreutilsFsCall(fn() => scandir($directory['path'], SCANDIR_SORT_NONE), $warning);
+        if ($items === false) {
+            coreutilsAddError($result, coreutilsFsError('ls', 'open directory', $directory['name'], $warning));
+            $group['blocks'] = null;
+            $group['readable'] = false;
+            $result['data']['directories'][] = $group;
+            continue;
+        }
+        $items = array_values(array_filter($items, fn($name) => ($options['all'] ?? false) || $name[0] !== '.'));
+        usort($items, fn($a, $b) => coreutilsCompare($a, $b, $collator));
+        if ($options['group-directories-first'] ?? false) {
+            $dirs = $files = [];
+            foreach ($items as $name) {
+                $full = $directory['path'] . DIRECTORY_SEPARATOR . $name;
+                if (coreutilsIsDirectory($full)) $dirs[] = $name;
+                else $files[] = $name;
             }
+            $items = array_merge($dirs, $files);
         }
-
-        $items = array_merge($dirs, $files);
-    }
-
-    foreach ($items as $item) {
-        $fullpath = $path . DIRECTORY_SEPARATOR . $item;
-        printName($item, $fullpath, $flags, $longFlags);
-    }
-}
-
-function humanSize($bytes, $useSI = false) {
-    $base = $useSI ? 1000 : 1024;
-    $units = $useSI ? ['','k','M','G','T','P','E'] : ['','K','M','G','T','P','E'];
-
-    $i = 0;
-    while ($bytes >= $base && $i < count($units) - 1) {
-        $bytes /= $base;
-        $i++;
-    }
-
-    // GNU-style rounding
-    if ($bytes >= 10 || floor($bytes) == $bytes) {
-        return sprintf("%.0f%s", $bytes, $units[$i]);
-    }
-
-    return sprintf("%.1f%s", $bytes, $units[$i]);
-}
-
-function symbolicPerms($path){
-    $perms = fileperms($path);
-    $info = match ($perms & 0xF000) {
-        0xC000 => 's', // socket
-        0xA000 => 'l', // symbolic link
-        0x8000 => '-', // regular file
-        0x6000 => 'b', // block special
-        0x4000 => 'd', // directory
-        0x2000 => 'c', // character special
-        0x1000 => 'p', // FIFO pipe
-        default => 'u', // unknown
-    };
-    
-    // Owner
-    $info .= (($perms & 0x0100) ? 'r' : '-');
-    $info .= (($perms & 0x0080) ? 'w' : '-');
-    $info .= (($perms & 0x0040) ?
-                (($perms & 0x0800) ? 's' : 'x' ) :
-                (($perms & 0x0800) ? 'S' : '-'));
-    
-    // Group
-    $info .= (($perms & 0x0020) ? 'r' : '-');
-    $info .= (($perms & 0x0010) ? 'w' : '-');
-    $info .= (($perms & 0x0008) ?
-                (($perms & 0x0400) ? 's' : 'x' ) :
-                (($perms & 0x0400) ? 'S' : '-'));
-    
-    // World
-    $info .= (($perms & 0x0004) ? 'r' : '-');
-    $info .= (($perms & 0x0002) ? 'w' : '-');
-    $info .= (($perms & 0x0001) ?
-                (($perms & 0x0200) ? 't' : 'x' ) :
-                (($perms & 0x0200) ? 'T' : '-'));
-    
-    return $info;
-}
-
-// ====== Main logic ======
-
-function ls($input) {
-    //$command = $input['command']; // always 'ls' here
-    $flags = $input['flags'];
-    $longFlags = $input['longFlags'];
-    $flagsWithValue = $input['flagsWithValue']; // not used in this version
-    $args = $input['args'];
-
-    $validOptions = ['a', 'g', 'G', 'h', 'l', 'o',
-                     'all', 'group-directories-first', 'human-readable', 'si'];
-    if(!validateOptions('ls', $validOptions, $flags, $longFlags, $flagsWithValue)) return;
-    
-    global $rows;
-    global $st_blocks;
-    $files = [];
-    $folders = [];
-    $longListing = in_array('l', $flags);
-
-    // Flag '-o' is like -l, but do not list group information
-    // Replaces '-o' with '-l' and '-G', deletes '-o', reindex array $flags
-    if (in_array('o', $flags)) {
-        if (!$longListing) {
-            $flags[] = 'l';
-            $longListing = true;
-        }
-        if (!in_array('G', $flags)) {
-            $flags[] = 'G';
-        }
-        $oKey = array_find_key($flags, function(string $value) { return $value == 'o'; });
-        unset($flags[$oKey]);
-        $flags = array_values($flags);
-    }
-
-    // Flag '-g' is like '-l', but do not list owner
-    // Insert the '-l' flag into the array, if not, and set $longListing to true.
-    if (in_array('g', $flags)) {
-        if (!$longListing) {
-            $flags[] = 'l';
-            $longListing = true;
-        }
-    }
-    
-    if (empty($args)) {
-        $folders['.'] = $_SESSION['cwd'];
-    } else {
-        foreach ($args as $item) {
-            $rp = realpath($_SESSION['cwd'] . DIRECTORY_SEPARATOR . $item);
-
-            if ($rp === false) {
-                printError('ls', ERR_NO_SUCH_FILE, $item);
+        foreach ($items as $name) {
+            $path = $directory['path'] . DIRECTORY_SEPARATOR . $name;
+            $stat = coreutilsLstat($path, $warning);
+            if ($stat === false) {
+                coreutilsAddError($result, coreutilsFsError('ls', 'access', $path, $warning));
+                $group['blocks'] = null;
                 continue;
             }
-
-            if (is_dir($rp)) {
-                $folders[$item] = $rp;
-            } else {
-                $files[$item] = $rp;
-            }
+            $entry = coreutilsLsEntry($name, $path, $stat, $result);
+            $group['entries'][] = $entry;
+            $group['blocks'] = $group['blocks'] === null || $entry['blocks'] === null
+                ? null : $group['blocks'] + $entry['blocks'];
         }
+        $result['data']['directories'][] = $group;
     }
-
-    if (!empty($files)) {
-        foreach ($files as $name => $path) {
-            printName($name, $path, $flags, $longFlags);
-        }
-    }
-
-    if (!empty($folders)) {
-        if (!empty($files)) {
-            $rows[] = '';
-        }
-
-        $last = array_key_last($folders);
-
-        foreach ($folders as $name => $path) {
-            if (count($folders) + count($files) > 1) {
-                $rows[] = "$name:";
-                if ($longListing) {
-                    $rows[] = "total __BLOCKS__";
-                }
-            }
-
-            listDirectory($path, $flags, $longFlags);
-            
-            if ($longListing) {
-                $total = $st_blocks / 2;
-                
-                $human = in_array('h', $flags) || in_array('human-readable', $longFlags);
-                $useSI = in_array('si', $longFlags);
-                
-                if ($human || $useSI) {
-                    $total = humanSize($total * 1024, $useSI);
-                }
-
-                foreach ($rows as &$row) {
-                    if (is_string($row)) {
-                        $row = str_replace('__BLOCKS__', $total, $row);
-                    }
-                }
-                unset($row);
-
-                $st_blocks = 0;
-            }
-
-            if ($name !== $last) {
-                $rows[] = '';
-            }
-        }
-    }
-    
-    printList($flags);
-    
-    $rows = [];
-    $st_blocks = 0;
+    return $result;
 }
