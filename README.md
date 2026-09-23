@@ -12,7 +12,7 @@ The goal is practical, predictable behavior: do one thing well, keep interfaces
 simple, and let applications compose the returned data. This is a library, not
 a shell emulator or a complete GNU Coreutils replacement.
 
-Currently implemented: **ls** and **mkdir**.
+Currently implemented: **ls**, **mkdir**, **mv**, **cp**, **rm** and **rmdir**.
 
 ## Requirements
 
@@ -38,12 +38,13 @@ Load all functions with:
 require_once __DIR__ . '/php-coreutils/src/bootstrap.php';
 ```
 
-Alternatively, include `src/ls.php` or `src/mkdir.php` individually. For text or
+Alternatively, include each command file (`src/ls.php`, `src/mkdir.php`, `src/mv.php`,
+`src/cp.php`, `src/rm.php` or `src/rmdir.php`) individually. For text or
 HTML formatting, also include `src/lib/format.php`.
 
 ## Usage
 
-Both commands accept an input array and an optional working directory. Relative
+All commands accept an input array and an optional working directory. Relative
 operands use that directory; absolute operands remain absolute. Omitting the
 working directory uses `getcwd()`.
 
@@ -58,7 +59,8 @@ if ($result['status'] !== 0) {
 ```
 
 `_mkdir()` keeps its original name to avoid a collision with PHP's native
-`mkdir()` function. No command prints anything on its own.
+`mkdir()` function. Similarly, `_rmdir()` avoids the native `rmdir()` name.
+No command prints anything on its own.
 
 For a web interface, use the HTML formatter. It escapes the entire output,
 including names, link targets, and error messages:
@@ -96,7 +98,7 @@ Every command returns an array with these keys:
 
 | Key | Meaning |
 | --- | --- |
-| `command` | `ls` or `mkdir`. |
+| `command` | `ls`, `mkdir`, `mv`, `cp`, `rm` or `rmdir`. |
 | `status` | `0`: success; `1`: filesystem error, possibly with partial success; `2`: invalid input. |
 | `data` | Structured results described below. Names and sizes are never HTML-escaped or preformatted. |
 | `errors` | Errors containing `code`, `message`, and `path` (which can be `null`). |
@@ -113,8 +115,20 @@ Every command returns an array with these keys:
 * `mkdir`: `data.created` includes every directory actually created, including
   parents; `data.existing` lists requested directories accepted by `-p`.
 
+* `mv`: `data.moved` contains `source` and `destination` absolute path pairs;
+  `data.skipped` adds `reason: destination-exists` for destinations skipped by `-n`.
+
+* `cp`: `data.copied` lists copied files and links as `source` / `destination`
+  absolute path pairs; `data.created` lists newly created directories using the
+  same pairs; `data.skipped` adds `reason: destination-exists` for `-n` skips.
+  A created directory is recorded even if copying one of its children fails.
+
+* `rm` / `rmdir`: `data.removed` lists absolute paths actually deleted, in
+  deletion order (children before their directory). `data.skipped` contains
+  `{path, reason: not-found}` entries for missing paths ignored by `rm -f`.
+
 Syntax and option errors are checked before filesystem changes. Filesystem
-errors do not roll back earlier creations: remaining operands are still tried.
+errors do not roll back earlier changes: remaining operands are still tried.
 A directory can appear in `created` even if applying its explicit mode failed;
 check `status` and `errors`. These status codes are the library contract, not a
 promise of exact GNU exit-status compatibility.
@@ -138,7 +152,18 @@ Applications needing separate output/error channels should use `data` and
 | ls | `--group-directories-first` | `group-directories-first` |
 | mkdir | `-p`, `--parents` | `parents` |
 | mkdir | `-m MODE`, `-mMODE`, `--mode MODE`, `--mode=MODE` | `mode` |
-| both | `--help` | `help` |
+| mv | `-f`, `--force` | `force` |
+| mv | `-n`, `--no-clobber` | `no-clobber` |
+| mv | `-v`, `--verbose` | `verbose` |
+| cp | `-r`, `--recursive` | `recursive` |
+| cp | `-n`, `--no-clobber` | `no-clobber` |
+| cp | `-v`, `--verbose` | `verbose` |
+| rm | `-r`, `--recursive` | `recursive` |
+| rm | `-f`, `--force` | `force` |
+| rm | `-v`, `--verbose` | `verbose` |
+| rmdir | `-p`, `--parents` | `parents` |
+| rmdir | `-v`, `--verbose` | `verbose` |
+| all | `--help` | `help` |
 
 Boolean canonical options accept `true` or `false`. `mode` accepts a string of
 three or four octal digits; symbolic modes are not implemented. The last
@@ -150,6 +175,117 @@ explicit mode is applied only to a newly created final directory. Missing
 parents use default permissions, with owner write/search access ensured.
 Existing directories are never chmodded. Windows permissions follow PHP and
 Windows semantics; Unix permission bits cannot provide equivalent guarantees.
+
+## Moving and renaming
+
+```php
+$result = mv(parseCommand('mv old.txt new.txt'), $cwd);
+$result = mv(parseCommand('mv -nv file.txt folder/'), $cwd);
+$result = mv(parseCommand('mv one.txt two.txt folder/'), $cwd);
+echo coreutilsHtml($result);
+```
+
+Two operands rename an entry or move it into an existing destination directory.
+Multiple sources require an existing directory. Files, populated directories
+and symbolic links are supported; source links themselves are moved. Relative
+link targets remain unchanged and may resolve differently after moving.
+Existing files are replaced by default. `-n` skips existing destinations
+(including broken links) with status 0; the last enabled `-f` or `-n` wins.
+`-f` does not bypass permissions. Successful moves are silent unless `-v` is set.
+An earlier destination from the same call will not be overwritten again.
+
+This version uses PHP `rename()` on the same filesystem only. Cross-filesystem
+moves return an error without a copy/delete fallback. Existing nonempty
+directories, self-moves, and moving a directory into itself are rejected.
+A trailing slash on a source symlink is rejected to avoid dereferencing it.
+Overwrite behavior and permissions follow the host OS; Windows can impose
+additional restrictions. Interactive `-i` is not implemented. The `-n` existence
+check is not atomic against concurrent filesystem changes; applications must
+serialize conflicting operations when that guarantee is needed.
+
+## Copying
+
+```php
+$result = cp(parseCommand('cp original.txt backup.txt'), $cwd);
+$result = cp(parseCommand('cp one.txt two.txt backups/'), $cwd);
+$result = cp(parseCommand('cp -rnv documents backups/'), $cwd);
+echo coreutilsHtml($result);
+```
+
+`cp()` keeps the source intact. Two operands copy to a new name or into an
+existing destination directory. Multiple sources require an existing directory.
+Directories require `-r` / `--recursive`; hidden entries and empty directories
+are included, and existing destination directories are merged. Missing parents
+of the top-level destination are not automatically created.
+
+Existing regular files are overwritten by default. `-n` skips existing leaves
+with status 0 while still merging directories; `-v` reports copied files/links
+and newly created directories. Without `-v`, successful copies are silent.
+Same-file copies (including hard links), copying a directory into itself, and
+replacing an earlier file copied in the same call are rejected.
+
+Without `-r`, source symlinks to regular files are followed. With `-r`, source
+symlinks themselves are copied, including broken links and links to directories;
+their target text is unchanged. Destination leaf symlinks are rejected (or
+skipped with `-n`), rather than written through or replaced. An explicitly
+supplied destination directory link is followed, but links encountered in the
+destination tree are not traversed. Type collisions and special files such as
+FIFOs, sockets and devices are rejected. Slash-suffixed source links and source
+operands ending in `.`, `..`, or the filesystem root are not supported; supply
+a named source entry.
+
+Copies may cross filesystems, subject to host permissions. Metadata preservation
+(`-p` / `-a`), `-f`, `-i`, `-R`, ACLs and extended attributes are not implemented.
+New directories use `0777` filtered by umask; file creation permissions follow
+PHP `copy()` and the host. Ownership, timestamps and source modes are not
+explicitly preserved. Existing directory permissions remain unchanged.
+
+Copies are not transactional: an I/O failure can leave a partial destination;
+completed copies are not rolled back and remaining entries are still attempted.
+Existence and identity checks are not atomic against concurrent filesystem
+changes. Applications must serialize conflicting operations when necessary.
+
+## Removing files and directories
+
+```php
+$result = rm(parseCommand('rm obsolete.txt'), $cwd);
+$result = rm(parseCommand('rm -rv old-backup'), $cwd);
+$result = _rmdir(parseCommand('rmdir empty-folder'), $cwd);
+$result = _rmdir(parseCommand('rmdir -pv empty/parent/child'), $cwd);
+echo coreutilsHtml($result);
+```
+
+`rm()` removes files and symbolic links. Directories require `-r` /
+`--recursive`, which includes hidden entries and removes children before the
+parent directory. Final symbolic links are unlinked, including broken links
+and links to directories; recursion does not follow them. Intermediate path
+components still follow the filesystem's normal symlink semantics. A trailing
+slash on a file or symlink is rejected, rather than dereferencing it.
+
+`-f` / `--force` accepts missing operands and ignores paths proven absent by
+listing an accessible parent. Permission errors, invalid paths and attempts to
+remove a directory without `-r` remain errors. If absence cannot be established
+(for example because a parent cannot be listed), an error is returned.
+
+`_rmdir()` only removes empty real directories. Files, symbolic links and
+nonempty directories are errors. `-p` / `--parents` removes the requested
+directory and then its empty parents; it stops before the explicit cwd, its
+ancestors or the filesystem root. A nonempty parent stops that operand and
+returns an error, while earlier removals remain recorded.
+
+Both commands refuse root paths, final `.` / `..` components, the explicit
+working directory and its ancestors. These protections cannot be disabled
+with `-f`. They do not turn the working directory into a filesystem jail.
+Both support multiple operands, `--`, `--help`, and `-v` / `--verbose`.
+There are no interactive prompts; `-i`, `-R` and other unlisted GNU options
+are not implemented. Successful removal is silent unless `-v` is enabled.
+
+Deletion is permanent and is not rolled back on partial failure. Remaining
+operands (and sibling entries during recursion) are still attempted. No chmod
+or permission escalation is performed. Checks and removal are separate PHP
+filesystem operations: callers must prevent concurrent changes to paths when
+processing untrusted trees. Windows-specific filesystem semantics have not
+been tested in the WASM test environment.
 
 ## Parsing and paths
 
@@ -180,7 +316,7 @@ must enforce their own allowed-path policy when accepting untrusted requests.
 
 * Replace `ls($input)` used for immediate output with
   `echo coreutilsHtml(ls($input, $cwd))` in web pages, or use `coreutilsText()`.
-* Pass the same explicit `$cwd` to both commands. They no longer read
+* Pass the same explicit `$cwd` to all commands. They no longer read
   `$_SESSION['cwd']`.
 * `parseCommand()` now returns canonical `options`, replacing `flags`,
   `longFlags`, and `flagsWithValue`. Reparse stored command strings or migrate

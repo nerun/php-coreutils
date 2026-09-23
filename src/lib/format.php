@@ -118,6 +118,21 @@ function coreutilsText(array $result): string {
             $lines = array_merge($lines, coreutilsFormatEntries($directory['entries'], $settings, $formatter, $users, $groups));
         }
     }
+    if ($result['command'] === 'mv' && ($result['options']['verbose'] ?? false)) {
+        foreach ($result['data']['moved'] as $move) {
+            $lines[] = coreutilsQuoteName($move['source']) . ' -> ' . coreutilsQuoteName($move['destination']);
+        }
+    }
+    if ($result['command'] === 'cp' && ($result['options']['verbose'] ?? false)) {
+        foreach (array_merge($result['data']['created'], $result['data']['copied']) as $copy) {
+            $lines[] = coreutilsQuoteName($copy['source']) . ' -> ' . coreutilsQuoteName($copy['destination']);
+        }
+    }
+    if (in_array($result['command'], ['rm', 'rmdir'], true) && ($result['options']['verbose'] ?? false)) {
+        foreach ($result['data']['removed'] as $path) {
+            $lines[] = 'removed ' . coreutilsQuoteName($path);
+        }
+    }
     return $lines ? implode("\n", $lines) . "\n" : '';
 }
 

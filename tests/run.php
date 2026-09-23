@@ -376,6 +376,10 @@ $tests['Unix cwd ending in a backslash remains intact'] = fn() => fixture(functi
     check(is_dir($base . '/tail\\/inside'));
 });
 
+require __DIR__ . '/mv.php';
+require __DIR__ . '/cp.php';
+require __DIR__ . '/removal.php';
+
 $passed = $failed = $skipped = 0;
 foreach ($tests as $name => $test) {
     try {

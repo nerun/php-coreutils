@@ -47,6 +47,33 @@ function coreutilsOptionDefinitions(string $command): array {
             'mode' => ['m', 'mode', true],
         ] + $common;
     }
+    if ($command === 'rm') {
+        return [
+            'recursive' => ['r', 'recursive', false],
+            'force' => ['f', 'force', false],
+            'verbose' => ['v', 'verbose', false],
+        ] + $common;
+    }
+    if ($command === 'rmdir') {
+        return [
+            'parents' => ['p', 'parents', false],
+            'verbose' => ['v', 'verbose', false],
+        ] + $common;
+    }
+    if ($command === 'cp') {
+        return [
+            'recursive' => ['r', 'recursive', false],
+            'no-clobber' => ['n', 'no-clobber', false],
+            'verbose' => ['v', 'verbose', false],
+        ] + $common;
+    }
+    if ($command === 'mv') {
+        return [
+            'force' => ['f', 'force', false],
+            'no-clobber' => ['n', 'no-clobber', false],
+            'verbose' => ['v', 'verbose', false],
+        ] + $common;
+    }
     return [];
 }
 
@@ -64,6 +91,42 @@ function coreutilsHelp(string $command): string {
             . "      --group-directories-first\n"
             . "      --help                 show this help\n"
             . "      --                     end options\n";
+    }
+    if ($command === 'rm') {
+        return "Usage: rm [OPTION]... FILE...\n"
+            . "Remove entries; source links themselves are removed.\n\n"
+            . "  -r, --recursive    remove directories and their contents\n"
+            . "  -f, --force        ignore missing entries and missing operands\n"
+            . "  -v, --verbose      report removed entries\n"
+            . "      --help         show this help\n"
+            . "      --             end options\n";
+    }
+    if ($command === 'rmdir') {
+        return "Usage: rmdir [OPTION]... DIRECTORY...\n"
+            . "Remove empty real directories only.\n\n"
+            . "  -p, --parents      also remove empty parents; stop before cwd or root\n"
+            . "  -v, --verbose      report removed directories\n"
+            . "      --help         show this help\n"
+            . "      --             end options\n";
+    }
+    if ($command === 'cp') {
+        return "Usage: cp [OPTION]... SOURCE... DESTINATION\n"
+            . "Copy files; multiple sources require an existing destination directory.\n\n"
+            . "  -r, --recursive     copy directories and preserve source symbolic links\n"
+            . "  -n, --no-clobber    skip existing destination files\n"
+            . "  -v, --verbose      report copied entries and created directories\n"
+            . "      --help         show this help\n"
+            . "      --             end options\n";
+    }
+    if ($command === 'mv') {
+        return "Usage: mv [OPTION]... SOURCE... DESTINATION\n"
+            . "Rename or move files, directories and symbolic links on the same filesystem.\n\n"
+            . "  -f, --force          replace existing files (default)\n"
+            . "  -n, --no-clobber     skip existing destinations\n"
+            . "  -v, --verbose       report completed moves\n"
+            . "      --help          show this help\n"
+            . "      --              end options\n"
+            . "The last -f or -n wins. Multiple sources require an existing directory.\n";
     }
     return "Usage: mkdir [OPTION]... DIRECTORY...\n"
         . "Create directories.\n\n"

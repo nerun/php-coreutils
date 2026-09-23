@@ -26,10 +26,8 @@
 # TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-require_once __DIR__ . '/ls.php';
-require_once __DIR__ . '/mkdir.php';
-require_once __DIR__ . '/mv.php';
-require_once __DIR__ . '/cp.php';
-require_once __DIR__ . '/rm.php';
-require_once __DIR__ . '/rmdir.php';
-require_once __DIR__ . '/lib/format.php';
+require_once __DIR__ . '/lib/removal.php';
+
+function rm(array $input, ?string $cwd = null): array {
+    return coreutilsRemove('rm', $input, $cwd);
+}
