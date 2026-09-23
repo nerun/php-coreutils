@@ -13,6 +13,7 @@ if (!isset($_SESSION['cwd']) || !is_string($_SESSION['cwd']) || $_SESSION['cwd']
     $_SESSION['cwd'] = __DIR__;
 }
 
+$debug = False;
 $cwd = $_SESSION['cwd'];
 session_write_close();
 
@@ -21,7 +22,13 @@ function escapeHtml(string $text): string {
 }
 
 function prompt(string $input, string $cwd): void {
-    echo '<div>$ ' . escapeHtml($input) . '</div>';
+    echo '<div style="
+                display: inline-block;
+                margin-top: 1px;
+                padding: 0 5px;
+                border: 1px solid silver;
+                border-radius: 5px;
+          "><strong>&#11177; ' . escapeHtml($input) . '</strong></div>';
 
     $args = parseCommand($input);
 
@@ -61,19 +68,23 @@ function prompt(string $input, string $cwd): void {
             break;
     }
 
-    // Os comandos retornam dados; o formatador produz a saída HTML com escape.
+    // The commands return data; the formatter produces escaped HTML output.
     echo coreutilsHtml($result);
+    
+    global $debug;
 
-    echo '<pre class="debug"><b>DEBUG: $args</b>' . "\n\n";
-    echo escapeHtml(print_r($args, true));
-    echo "\n<b>Status:</b> " . (int) $result['status'];
-    echo '</pre>';
+    if ( $debug ) {
+        echo '<pre class="debug"><b>DEBUG: $args</b>' . "\n\n";
+        echo escapeHtml(print_r($args, true));
+        echo "\n<b>Status:</b> " . (int) $result['status'];
+        echo '</pre>';
+    }
 }
 
 $locales = str_replace(';', ";\n", (string) setlocale(LC_ALL, 0));
 ?>
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
     <head>
         <meta charset="UTF-8">
         <title>PHP Coreutils</title>
@@ -92,16 +103,25 @@ $locales = str_replace(';', ";\n", (string) setlocale(LC_ALL, 0));
         </style>
     </head>
     <body>
-        <h1>SAÍDA</h1>
+        <h1>OUTPUT</h1>
 
         <?php
-            prompt('mkdir -p teste/a/c/d/e', $cwd);
+            prompt('mkdir -p TESTE/a/c/d/e', $cwd);
             prompt('ls', $cwd);
-        ?>
+            prompt('mv TESTE/a TESTE/x', $cwd);
+            prompt('ls TESTE', $cwd);
+            prompt('cp -r ./TESTE/x/c ./TESTE-c', $cwd);
+            prompt('ls', $cwd);
+            prompt('ls TESTE-c', $cwd);
+            prompt('rm -r TESTE TESTE-c', $cwd);
+            prompt('ls', $cwd);
 
-        <hr>
-        <h1>DEBUG</h1>
-        <div>CWD = <?= escapeHtml($cwd) ?></div>
-        <pre><?= escapeHtml($locales) ?></pre>
+            if ( $debug ) {
+                echo '<hr>';
+                echo '<h1>DEBUG</h1>';
+                echo '<div>Current Working Directory (CWD) = ' . escapeHtml($cwd). '</div>';
+                echo '<pre>' . escapeHtml($locales) . '</pre>';
+            }
+        ?>
     </body>
 </html>
