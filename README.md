@@ -96,14 +96,14 @@ $result = _mkdir([
 
 Every command returns an array with these keys:
 
-| Key | Meaning |
-| --- | --- |
-| `command` | `ls`, `mkdir`, `mv`, `cp`, `rm` or `rmdir`. |
-| `status` | `0`: success; `1`: filesystem error, possibly with partial success; `2`: invalid input. |
-| `data` | Structured results described below. Names and sizes are never HTML-escaped or preformatted. |
-| `errors` | Errors containing `code`, `message`, and `path` (which can be `null`). |
-| `options` | Validated canonical options. |
-| `help` | Help text for `--help`, otherwise `null`. |
+| Key       | Meaning                                                                                     |
+| --------- | ------------------------------------------------------------------------------------------- |
+| `command` | `ls`, `mkdir`, `mv`, `cp`, `rm` or `rmdir`.                                                 |
+| `status`  | `0`: success; `1`: filesystem error, possibly with partial success; `2`: invalid input.     |
+| `data`    | Structured results described below. Names and sizes are never HTML-escaped or preformatted. |
+| `errors`  | Errors containing `code`, `message`, and `path` (which can be `null`).                      |
+| `options` | Validated canonical options.                                                                |
+| `help`    | Help text for `--help`, otherwise `null`.                                                   |
 
 `ls()` also records the requested `locale` for the formatter.
 
@@ -140,30 +140,30 @@ Applications needing separate output/error channels should use `data` and
 
 ## Options
 
-| Command | Short / long option | Canonical option |
-| --- | --- | --- |
-| ls | `-a`, `--all` | `all` |
-| ls | `-l` | `long` |
-| ls | `-g` (long format without owner) | `omit-owner` |
-| ls | `-o` (long format without group) | `omit-group` |
-| ls | `-G` (omit group, without selecting long format) | `no-group` |
-| ls | `-h`, `--human-readable` (base 1024) | `human-readable` |
-| ls | `--si` (base 1000) | `si` |
-| ls | `--group-directories-first` | `group-directories-first` |
-| mkdir | `-p`, `--parents` | `parents` |
-| mkdir | `-m MODE`, `-mMODE`, `--mode MODE`, `--mode=MODE` | `mode` |
-| mv | `-f`, `--force` | `force` |
-| mv | `-n`, `--no-clobber` | `no-clobber` |
-| mv | `-v`, `--verbose` | `verbose` |
-| cp | `-r`, `--recursive` | `recursive` |
-| cp | `-n`, `--no-clobber` | `no-clobber` |
-| cp | `-v`, `--verbose` | `verbose` |
-| rm | `-r`, `--recursive` | `recursive` |
-| rm | `-f`, `--force` | `force` |
-| rm | `-v`, `--verbose` | `verbose` |
-| rmdir | `-p`, `--parents` | `parents` |
-| rmdir | `-v`, `--verbose` | `verbose` |
-| all | `--help` | `help` |
+| Command | Short / long option                               | Canonical option          |
+| ------- | ------------------------------------------------- | ------------------------- |
+| ls      | `-a`, `--all`                                     | `all`                     |
+|         | `-l`                                              | `long`                    |
+|         | `-g` (long format without owner)                  | `omit-owner`              |
+|         | `-o` (long format without group)                  | `omit-group`              |
+|         | `-G` (omit group, without selecting long format)  | `no-group`                |
+|         | `-h`, `--human-readable` (base 1024)              | `human-readable`          |
+|         | `--si` (base 1000)                                | `si`                      |
+|         | `--group-directories-first`                       | `group-directories-first` |
+| mkdir   | `-p`, `--parents`                                 | `parents`                 |
+|         | `-m MODE`, `-mMODE`, `--mode MODE`, `--mode=MODE` | `mode`                    |
+| mv      | `-f`, `--force`                                   | `force`                   |
+|         | `-n`, `--no-clobber`                              | `no-clobber`              |
+|         | `-v`, `--verbose`                                 | `verbose`                 |
+| cp      | `-r`, `--recursive`                               | `recursive`               |
+|         | `-n`, `--no-clobber`                              | `no-clobber`              |
+|         | `-v`, `--verbose`                                 | `verbose`                 |
+| rm      | `-r`, `--recursive`                               | `recursive`               |
+|         | `-f`, `--force`                                   | `force`                   |
+|         | `-v`, `--verbose`                                 | `verbose`                 |
+| rmdir   | `-p`, `--parents`                                 | `parents`                 |
+|         | `-v`, `--verbose`                                 | `verbose`                 |
+| all     | `--help`                                          | `help`                    |
 
 Boolean canonical options accept `true` or `false`. `mode` accepts a string of
 three or four octal digits; symbolic modes are not implemented. The last
@@ -311,19 +311,6 @@ Each listed directory has its own long-format total, including empty directories
 Filesystem access remains subject to the PHP account's permissions and hosting
 restrictions. The working directory is not a sandbox boundary: applications
 must enforce their own allowed-path policy when accepting untrusted requests.
-
-## Migration from the initial implementation
-
-* Replace `ls($input)` used for immediate output with
-  `echo coreutilsHtml(ls($input, $cwd))` in web pages, or use `coreutilsText()`.
-* Pass the same explicit `$cwd` to all commands. They no longer read
-  `$_SESSION['cwd']`.
-* `parseCommand()` now returns canonical `options`, replacing `flags`,
-  `longFlags`, and `flagsWithValue`. Reparse stored command strings or migrate
-  manually constructed arrays; obsolete fields are rejected rather than ignored.
-* Inspect the returned status/errors instead of relying on echoed diagnostics.
-* Internal printing helpers, error constants, `setAppLocale()` and
-  `CURRENT_LOCALE` have been replaced by side-effect-free helpers.
 
 ## Tests
 
