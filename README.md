@@ -12,7 +12,7 @@ The goal is practical, predictable behavior: do one thing well, keep interfaces
 simple, and let applications compose the returned data. This is a library, not
 a shell emulator or a complete GNU Coreutils replacement.
 
-Currently implemented: **ls**, **mkdir**, **mv**, **cp**, **rm** and **rmdir**.
+Currently implemented: **ls**, **mkdir**, **mv**, **cp**, **rm**, **rmdir** and **find**.
 
 ## Requirements
 
@@ -39,7 +39,7 @@ require_once __DIR__ . '/php-coreutils/src/bootstrap.php';
 ```
 
 Alternatively, include each command file (`src/ls.php`, `src/mkdir.php`, `src/mv.php`,
-`src/cp.php`, `src/rm.php` or `src/rmdir.php`) individually. For text or
+`src/cp.php`, `src/rm.php`, `src/rmdir.php` or `src/find.php`) individually. For text or
 HTML formatting, also include `src/lib/format.php`.
 
 ## Usage
@@ -96,14 +96,14 @@ $result = _mkdir([
 
 Every command returns an array with these keys:
 
-| Key       | Meaning                                                                                     |
-| --------- | ------------------------------------------------------------------------------------------- |
-| `command` | `ls`, `mkdir`, `mv`, `cp`, `rm` or `rmdir`.                                                 |
-| `status`  | `0`: success; `1`: filesystem error, possibly with partial success; `2`: invalid input.     |
-| `data`    | Structured results described below. Names and sizes are never HTML-escaped or preformatted. |
-| `errors`  | Errors containing `code`, `message`, and `path` (which can be `null`).                      |
-| `options` | Validated canonical options.                                                                |
-| `help`    | Help text for `--help`, otherwise `null`.                                                   |
+| Key | Meaning |
+| --- | --- |
+| `command` | `ls`, `mkdir`, `mv`, `cp`, `rm`, `rmdir` or `find`. |
+| `status` | `0`: success; `1`: filesystem error, possibly with partial success; `2`: invalid input. |
+| `data` | Structured results described below. Names and sizes are never HTML-escaped or preformatted. |
+| `errors` | Errors containing `code`, `message`, and `path` (which can be `null`). |
+| `options` | Validated canonical options. |
+| `help` | Help text for `--help`, otherwise `null`. |
 
 `ls()` also records the requested `locale` for the formatter.
 
@@ -140,30 +140,31 @@ Applications needing separate output/error channels should use `data` and
 
 ## Options
 
-| Command | Short / long option                               | Canonical option          |
-| ------- | ------------------------------------------------- | ------------------------- |
-| ls      | `-a`, `--all`                                     | `all`                     |
-|         | `-l`                                              | `long`                    |
-|         | `-g` (long format without owner)                  | `omit-owner`              |
-|         | `-o` (long format without group)                  | `omit-group`              |
-|         | `-G` (omit group, without selecting long format)  | `no-group`                |
-|         | `-h`, `--human-readable` (base 1024)              | `human-readable`          |
-|         | `--si` (base 1000)                                | `si`                      |
-|         | `--group-directories-first`                       | `group-directories-first` |
-| mkdir   | `-p`, `--parents`                                 | `parents`                 |
-|         | `-m MODE`, `-mMODE`, `--mode MODE`, `--mode=MODE` | `mode`                    |
-| mv      | `-f`, `--force`                                   | `force`                   |
-|         | `-n`, `--no-clobber`                              | `no-clobber`              |
-|         | `-v`, `--verbose`                                 | `verbose`                 |
-| cp      | `-r`, `--recursive`                               | `recursive`               |
-|         | `-n`, `--no-clobber`                              | `no-clobber`              |
-|         | `-v`, `--verbose`                                 | `verbose`                 |
-| rm      | `-r`, `--recursive`                               | `recursive`               |
-|         | `-f`, `--force`                                   | `force`                   |
-|         | `-v`, `--verbose`                                 | `verbose`                 |
-| rmdir   | `-p`, `--parents`                                 | `parents`                 |
-|         | `-v`, `--verbose`                                 | `verbose`                 |
-| all     | `--help`                                          | `help`                    |
+| Command | Short / long option | Canonical option |
+| --- | --- | --- |
+| ls | `-a`, `--all` | `all` |
+| ls | `-l` | `long` |
+| ls | `-g` (long format without owner) | `omit-owner` |
+| ls | `-o` (long format without group) | `omit-group` |
+| ls | `-G` (omit group, without selecting long format) | `no-group` |
+| ls | `-h`, `--human-readable` (base 1024) | `human-readable` |
+| ls | `--si` (base 1000) | `si` |
+| ls | `--group-directories-first` | `group-directories-first` |
+| mkdir | `-p`, `--parents` | `parents` |
+| mkdir | `-m MODE`, `-mMODE`, `--mode MODE`, `--mode=MODE` | `mode` |
+| mv | `-f`, `--force` | `force` |
+| mv | `-n`, `--no-clobber` | `no-clobber` |
+| mv | `-v`, `--verbose` | `verbose` |
+| cp | `-r`, `--recursive` | `recursive` |
+| cp | `-n`, `--no-clobber` | `no-clobber` |
+| cp | `-v`, `--verbose` | `verbose` |
+| rm | `-r`, `--recursive` | `recursive` |
+| rm | `-f`, `--force` | `force` |
+| rm | `-v`, `--verbose` | `verbose` |
+| rmdir | `-p`, `--parents` | `parents` |
+| rmdir | `-v`, `--verbose` | `verbose` |
+| find | `-type TYPES`, `--type TYPES`, `--type=TYPES` | `type` |
+| all | `--help` | `help` |
 
 Boolean canonical options accept `true` or `false`. `mode` accepts a string of
 three or four octal digits; symbolic modes are not implemented. The last
@@ -175,6 +176,45 @@ explicit mode is applied only to a newly created final directory. Missing
 parents use default permissions, with owner write/search access ensured.
 Existing directories are never chmodded. Windows permissions follow PHP and
 Windows semantics; Unix permission bits cannot provide equivalent guarantees.
+
+## Finding entries
+
+```php
+$result = find(parseCommand('find . -type f,l'), $cwd);
+echo coreutilsHtml($result);
+
+$result = find(parseCommand('find documents backups -type d'), $cwd);
+$result = find(['args' => ['.'], 'options' => ['type' => 'l']], $cwd);
+```
+
+`find()` recursively lists starting paths and their descendants. With no path,
+it searches `.`. With no type filter, it includes all entry types. Hidden names
+are included; `.` and `..` directory entries are not revisited. Traversal is
+depth-first, with parents before children and siblings sorted in byte order.
+Multiple starting paths are searched in operand order, without deduplication.
+
+`-type f` selects regular files, `-type d` real directories, and `-type l`
+symbolic links, including broken links. Comma-separated types are alternatives:
+`-type f,l` selects files or links. Empty or unsupported types are invalid input.
+The last type option wins, following the library's option convention; repeated
+predicates are not combined as GNU find expressions. `--` ends option parsing;
+use `find -type f -- -folder` for a dash-prefixed starting path.
+
+Links encountered during traversal, including starting links, are listed but
+never traversed. A trailing separator on a starting link or file is rejected;
+it must identify a real directory. Intermediate path components still follow
+normal OS resolution rules. This is not a filesystem sandbox or an atomic
+snapshot: applications must control access and concurrent filesystem changes.
+
+`data.entries` contains matching entries with `name` (the displayed path,
+preserving the relative or absolute starting operand), `path` (absolute lookup
+path), and `type` (`f`, `d`, `l`, `p`, `c`, `b`, `s`, or `?` for unknown types).
+Text output lists one quoted path per line using the existing name formatter;
+HTML output is escaped. Filesystem failures produce status 1 and diagnostics,
+while other pending entries and starting paths are still processed.
+
+This initial subset does not implement `-name`, `-L`, depth limits, Boolean
+expressions, `-exec`, or `-delete`. Results are collected in memory.
 
 ## Moving and renaming
 
@@ -311,6 +351,19 @@ Each listed directory has its own long-format total, including empty directories
 Filesystem access remains subject to the PHP account's permissions and hosting
 restrictions. The working directory is not a sandbox boundary: applications
 must enforce their own allowed-path policy when accepting untrusted requests.
+
+## Migration from the initial implementation
+
+* Replace `ls($input)` used for immediate output with
+  `echo coreutilsHtml(ls($input, $cwd))` in web pages, or use `coreutilsText()`.
+* Pass the same explicit `$cwd` to all commands. They no longer read
+  `$_SESSION['cwd']`.
+* `parseCommand()` now returns canonical `options`, replacing `flags`,
+  `longFlags`, and `flagsWithValue`. Reparse stored command strings or migrate
+  manually constructed arrays; obsolete fields are rejected rather than ignored.
+* Inspect the returned status/errors instead of relying on echoed diagnostics.
+* Internal printing helpers, error constants, `setAppLocale()` and
+  `CURRENT_LOCALE` have been replaced by side-effect-free helpers.
 
 ## Tests
 

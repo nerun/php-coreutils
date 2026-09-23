@@ -121,7 +121,9 @@ function parseCommand(string $input): array {
         }
         $isLong = strncmp($token, '--', 2) === 0;
         $parts = $isLong ? explode('=', substr($token, 2), 2) : null;
-        $spellings = $isLong ? [$parts[0]] : str_split(substr($token, 1));
+        // find uses a multi-letter single-dash predicate, not a short-option cluster.
+        $wholeShort = !$isLong && isset($short[substr($token, 1)]) && strlen($token) > 2;
+        $spellings = $isLong ? [$parts[0]] : ($wholeShort ? [substr($token, 1)] : str_split(substr($token, 1)));
         foreach ($spellings as $j => $spelling) {
             $name = ($isLong ? $long : $short)[$spelling] ?? null;
             $label = ($isLong ? '--' : '-') . $spelling;
@@ -131,7 +133,7 @@ function parseCommand(string $input): array {
             }
             $takesValue = $definitions[$name][2];
             $attached = $isLong ? ($parts[1] ?? null)
-                : ($takesValue && $j + 1 < count($spellings) ? substr($token, $j + 2) : null);
+                : (!$wholeShort && $takesValue && $j + 1 < count($spellings) ? substr($token, $j + 2) : null);
             if (!$takesValue && $attached !== null) {
                 $parsed['errors'][] = coreutilsError($command, 'unexpected-value', "option '$label' takes no value");
                 break;

@@ -33,6 +33,10 @@ function prompt(string $input, string $cwd): void {
     $args = parseCommand($input);
 
     switch ($args['command']) {
+        case 'find':
+            $result = find($args, $cwd);
+            break;
+
         case 'ls':
             $result = ls($args, $cwd);
             break;
@@ -106,13 +110,14 @@ $locales = str_replace(';', ";\n", (string) setlocale(LC_ALL, 0));
         <h1>OUTPUT</h1>
 
         <?php
+            prompt('ls -lha --group-directories-first', $cwd);
             prompt('mkdir -p TESTE/a/c/d/e', $cwd);
-            prompt('ls', $cwd);
+            prompt('find TESTE', $cwd);
             prompt('mv TESTE/a TESTE/x', $cwd);
-            prompt('ls TESTE', $cwd);
+            prompt('find TESTE', $cwd);
             prompt('cp -r ./TESTE/x/c ./TESTE-c', $cwd);
             prompt('ls', $cwd);
-            prompt('ls TESTE-c', $cwd);
+            prompt('find -type d TESTE-c', $cwd);
             prompt('rm -r TESTE TESTE-c', $cwd);
             prompt('ls', $cwd);
 

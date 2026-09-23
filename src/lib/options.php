@@ -29,6 +29,9 @@
 /** Canonical name => [short spelling, long spelling, requires a value]. */
 function coreutilsOptionDefinitions(string $command): array {
     $common = ['help' => [null, 'help', false]];
+    if ($command === 'find') {
+        return ['type' => ['type', 'type', true]] + $common;
+    }
     if ($command === 'ls') {
         return [
             'all' => ['a', 'all', false],
@@ -78,6 +81,16 @@ function coreutilsOptionDefinitions(string $command): array {
 }
 
 function coreutilsHelp(string $command): string {
+    if ($command === 'find') {
+        return "Usage: find [PATH]... [-type TYPES]\n"
+            . "Recursively list entries, including starting paths and hidden names.\n"
+            . "The default path is .; symbolic links are not traversed.\n\n"
+            . "  -type, --type TYPES  f: regular files, d: directories, l: symbolic links\n"
+            . "                       comma-separated types match any listed type (f,l)\n"
+            . "                       the last type option wins\n"
+            . "      --help           show this help\n"
+            . "      --               end options\n";
+    }
     if ($command === 'ls') {
         return "Usage: ls [OPTION]... [FILE]...\n"
             . "List files; list the current directory when FILE is omitted.\n\n"

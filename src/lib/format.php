@@ -118,6 +118,11 @@ function coreutilsText(array $result): string {
             $lines = array_merge($lines, coreutilsFormatEntries($directory['entries'], $settings, $formatter, $users, $groups));
         }
     }
+    if ($result['command'] === 'find') {
+        foreach ($result['data']['entries'] as $entry) {
+            $lines[] = coreutilsQuoteName($entry['name']);
+        }
+    }
     if ($result['command'] === 'mv' && ($result['options']['verbose'] ?? false)) {
         foreach ($result['data']['moved'] as $move) {
             $lines[] = coreutilsQuoteName($move['source']) . ' -> ' . coreutilsQuoteName($move['destination']);

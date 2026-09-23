@@ -32,4 +32,5 @@ require_once __DIR__ . '/mv.php';
 require_once __DIR__ . '/cp.php';
 require_once __DIR__ . '/rm.php';
 require_once __DIR__ . '/rmdir.php';
+require_once __DIR__ . '/find.php';
 require_once __DIR__ . '/lib/format.php';
