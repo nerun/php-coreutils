@@ -19,3 +19,7 @@ Thumbs.db
 
 # PHPUnit (if you ever use it)
 .phpunit.result.cache
+
+# PHP CS Fixer
+# https://cs.symfony.com/doc/config.html
+php-cs-fixer-v3.phar
