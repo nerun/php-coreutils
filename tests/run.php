@@ -1,8 +1,11 @@
 <?php
+
 // Run with: php tests/run.php (no development dependencies required).
 error_reporting(E_ALL);
 set_error_handler(function ($severity, $message, $file, $line) {
-    if (error_reporting() & $severity) throw new ErrorException($message, 0, $severity, $file, $line);
+    if (error_reporting() & $severity) {
+        throw new ErrorException($message, 0, $severity, $file, $line);
+    }
     return false;
 });
 
@@ -14,32 +17,46 @@ ob_start();
 require_once __DIR__ . '/../src/bootstrap.php';
 $bootstrapOutput = ob_get_clean();
 
-class SkippedTest extends RuntimeException {}
-function check($condition, string $message = 'assertion failed'): void {
-    if (!$condition) throw new RuntimeException($message);
+class SkippedTest extends RuntimeException
+{
 }
-function same($expected, $actual): void {
+function check($condition, string $message = 'assertion failed'): void
+{
+    if (!$condition) {
+        throw new RuntimeException($message);
+    }
+}
+function same($expected, $actual): void
+{
     check($expected === $actual, 'expected ' . var_export($expected, true) . ', got ' . var_export($actual, true));
 }
-function skipUnless($condition, string $reason): void {
-    if (!$condition) throw new SkippedTest($reason);
+function skipUnless($condition, string $reason): void
+{
+    if (!$condition) {
+        throw new SkippedTest($reason);
+    }
 }
-function modeOf(string $path): int {
+function modeOf(string $path): int
+{
     clearstatcache(true, $path);
     return fileperms($path) & 07777;
 }
-function eraseFixture(string $path): void {
+function eraseFixture(string $path): void
+{
     if (is_link($path) || !is_dir($path)) {
         unlink($path);
         return;
     }
     chmod($path, 0700);
     foreach (scandir($path) as $name) {
-        if ($name !== '.' && $name !== '..') eraseFixture($path . '/' . $name);
+        if ($name !== '.' && $name !== '..') {
+            eraseFixture($path . '/' . $name);
+        }
     }
     rmdir($path);
 }
-function fixture(callable $test): void {
+function fixture(callable $test): void
+{
     $base = sys_get_temp_dir() . '/php-coreutils-' . bin2hex(random_bytes(8));
     mkdir($base, 0700);
     $cwd = getcwd();
@@ -52,7 +69,8 @@ function fixture(callable $test): void {
         eraseFixture($base);
     }
 }
-function nativePermissionSupport(string $base): void {
+function nativePermissionSupport(string $base): void
+{
     skipUnless(DIRECTORY_SEPARATOR !== '\\', 'POSIX permission semantics are unavailable on Windows');
     $mask = umask(0077);
     try {
@@ -63,13 +81,15 @@ function nativePermissionSupport(string $base): void {
     }
     skipUnless($mode === 0700, 'runtime filesystem does not apply a native umask');
 }
-function symlinkSupport(string $base): void {
+function symlinkSupport(string $base): void
+{
     skipUnless(function_exists('symlink'), 'symlink() unavailable');
-    $success = coreutilsFsCall(fn() => symlink('missing', $base . '/symlink-probe'));
+    $success = coreutilsFsCall(fn () => symlink('missing', $base . '/symlink-probe'));
     skipUnless($success, 'runtime cannot create symlinks');
     unlink($base . '/symlink-probe');
 }
-function names(array $result): array {
+function names(array $result): array
+{
     return array_column($result['data']['directories'][0]['entries'], 'name');
 }
 
@@ -114,19 +134,19 @@ $tests['invalid option spelling and unexpected values are rejected'] = function 
         check(count(parseCommand($input)['errors']) > 0, $input);
     }
 };
-$tests['missing option values are rejected before creation'] = fn() => fixture(function ($base) {
+$tests['missing option values are rejected before creation'] = fn () => fixture(function ($base) {
     foreach (['mkdir target -m', 'mkdir target --mode', 'mkdir -m -- target'] as $command) {
         same(2, _mkdir(parseCommand($command), $base)['status']);
         check(!file_exists($base . '/target'));
     }
 });
-$tests['invalid modes and missing operands never create directories'] = fn() => fixture(function ($base) {
+$tests['invalid modes and missing operands never create directories'] = fn () => fixture(function ($base) {
     foreach (['mkdir', 'mkdir -m888 bad', 'mkdir --mode=u=rwx bad', 'mkdir --mode= bad', 'mkdir -m"755\n" bad'] as $command) {
         same(2, _mkdir(parseCommand($command), $base)['status']);
         check(!file_exists($base . '/bad'));
     }
 });
-$tests['a malformed later operand prevents all mutations'] = fn() => fixture(function ($base) {
+$tests['a malformed later operand prevents all mutations'] = fn () => fixture(function ($base) {
     same(2, _mkdir(parseCommand('mkdir first ""'), $base)['status']);
     check(!file_exists($base . '/first'));
     same(2, _mkdir(['args' => ['first', "bad\0name"]], $base)['status']);
@@ -144,7 +164,7 @@ $tests['URL wrappers and empty paths are rejected'] = function () {
         same(2, _mkdir(['args' => [$path]])['status']);
     }
 };
-$tests['both commands use the explicit cwd, independent of sessions'] = fn() => fixture(function ($base) {
+$tests['both commands use the explicit cwd, independent of sessions'] = fn () => fixture(function ($base) {
     $_SESSION['cwd'] = $base . '/not-the-working-directory';
     $cwd = getcwd();
     ob_start();
@@ -156,27 +176,27 @@ $tests['both commands use the explicit cwd, independent of sessions'] = fn() => 
     same($cwd, getcwd());
     unset($_SESSION);
 });
-$tests['absolute operands are not prefixed with cwd'] = fn() => fixture(function ($base) {
+$tests['absolute operands are not prefixed with cwd'] = fn () => fixture(function ($base) {
     same(0, _mkdir(['args' => [$base . '/absolute']], __DIR__)['status']);
     same(0, ls(['args' => [$base . '/absolute']], __DIR__)['status']);
 });
-$tests['default cwd uses getcwd without requiring a session'] = fn() => fixture(function ($base) {
+$tests['default cwd uses getcwd without requiring a session'] = fn () => fixture(function ($base) {
     chdir($base);
     same(0, _mkdir(parseCommand('mkdir default'))['status']);
     same(['default'], names(ls(parseCommand('ls'))));
 });
-$tests['invalid cwd is a controlled error'] = fn() => fixture(function ($base) {
+$tests['invalid cwd is a controlled error'] = fn () => fixture(function ($base) {
     same(1, ls(parseCommand('ls'), $base . '/missing')['status']);
     same(1, _mkdir(parseCommand('mkdir no'), $base . '/missing')['status']);
 });
-$tests['mkdir reports partial success and continues after a filesystem error'] = fn() => fixture(function ($base) {
+$tests['mkdir reports partial success and continues after a filesystem error'] = fn () => fixture(function ($base) {
     file_put_contents($base . '/file', 'x');
     $result = _mkdir(parseCommand('mkdir file/child good'), $base);
     same(1, $result['status']);
     same(1, count($result['errors']));
     same([$base . '/good'], $result['data']['created']);
 });
-$tests['mkdir existing directory requires parents option'] = fn() => fixture(function ($base) {
+$tests['mkdir existing directory requires parents option'] = fn () => fixture(function ($base) {
     mkdir($base . '/existing');
     same(1, _mkdir(parseCommand('mkdir existing'), $base)['status']);
     $result = _mkdir(parseCommand('mkdir -p existing'), $base);
@@ -184,14 +204,14 @@ $tests['mkdir existing directory requires parents option'] = fn() => fixture(fun
     same([], $result['data']['created']);
     same([$base . '/existing'], $result['data']['existing']);
 });
-$tests['default mkdir respects umask'] = fn() => fixture(function ($base) {
+$tests['default mkdir respects umask'] = fn () => fixture(function ($base) {
     nativePermissionSupport($base);
     umask(0077);
     same(0, _mkdir(parseCommand('mkdir private'), $base)['status']);
     same(0700, modeOf($base . '/private'));
     same(0077, umask());
 });
-$tests['explicit mode overrides umask only for the final directory'] = fn() => fixture(function ($base) {
+$tests['explicit mode overrides umask only for the final directory'] = fn () => fixture(function ($base) {
     nativePermissionSupport($base);
     umask(0022);
     same(0, _mkdir(parseCommand('mkdir -p -m0700 parent/child'), $base)['status']);
@@ -201,7 +221,7 @@ $tests['explicit mode overrides umask only for the final directory'] = fn() => f
     same(0, _mkdir(parseCommand('mkdir -m0770 exact'), $base)['status']);
     same(0770, modeOf($base . '/exact'));
 });
-$tests['existing parents and final directories retain their permissions'] = fn() => fixture(function ($base) {
+$tests['existing parents and final directories retain their permissions'] = fn () => fixture(function ($base) {
     skipUnless(DIRECTORY_SEPARATOR !== '\\', 'POSIX permission semantics are unavailable on Windows');
     mkdir($base . '/existing');
     chmod($base . '/existing', 0750);
@@ -209,89 +229,103 @@ $tests['existing parents and final directories retain their permissions'] = fn()
     same(0750, modeOf($base . '/existing'));
     same(0700, modeOf($base . '/existing/new'));
 });
-$tests['recursive parents keep owner write/search under restrictive umask'] = fn() => fixture(function ($base) {
+$tests['recursive parents keep owner write/search under restrictive umask'] = fn () => fixture(function ($base) {
     nativePermissionSupport($base);
     umask(0777);
     same(0, _mkdir(parseCommand('mkdir -p -m0700 restrictive/child'), $base)['status']);
     same(0300, modeOf($base . '/restrictive'));
     same(0700, modeOf($base . '/restrictive/child'));
 });
-$tests['recursive creation and dash-prefixed names work'] = fn() => fixture(function ($base) {
+$tests['recursive creation and dash-prefixed names work'] = fn () => fixture(function ($base) {
     $result = _mkdir(parseCommand('mkdir --parents a/b/c -- -dash'), $base);
     same(0, $result['status']);
     same(4, count($result['data']['created']));
     check(is_dir($base . '/a/b/c'));
     check(is_dir($base . '/-dash'));
 });
-$tests['ls filters hidden entries and supports all'] = fn() => fixture(function ($base) {
+$tests['ls filters hidden entries and supports all'] = fn () => fixture(function ($base) {
     file_put_contents($base . '/visible', 'x');
     file_put_contents($base . '/.hidden', 'x');
     same(['visible'], names(ls(parseCommand('ls'), $base)));
     same(['.', '..', '.hidden', 'visible'], names(ls(parseCommand('ls -a'), $base)));
 });
-$tests['directory grouping retains sorted order within groups'] = fn() => fixture(function ($base) {
-    foreach (['z-dir', 'b-dir'] as $dir) mkdir($base . '/' . $dir);
-    foreach (['a-file', 'y-file'] as $file) file_put_contents($base . '/' . $file, 'x');
+$tests['directory grouping retains sorted order within groups'] = fn () => fixture(function ($base) {
+    foreach (['z-dir', 'b-dir'] as $dir) {
+        mkdir($base . '/' . $dir);
+    }
+    foreach (['a-file', 'y-file'] as $file) {
+        file_put_contents($base . '/' . $file, 'x');
+    }
     same(['b-dir', 'z-dir', 'a-file', 'y-file'], names(ls(parseCommand('ls --group-directories-first'), $base)));
 });
-$tests['single directory long listing always has a total'] = fn() => fixture(function ($base) {
+$tests['single directory long listing always has a total'] = fn () => fixture(function ($base) {
     same("total 0\n", coreutilsText(ls(parseCommand('ls -l'), $base)));
 });
-$tests['standalone file blocks do not contaminate directory totals'] = fn() => fixture(function ($base) {
+$tests['standalone file blocks do not contaminate directory totals'] = fn () => fixture(function ($base) {
     file_put_contents($base . '/large', str_repeat('x', 32768));
     mkdir($base . '/empty');
     $result = ls(parseCommand('ls -l large empty'), $base);
     same(0, $result['data']['directories'][0]['blocks']);
     check(strpos(coreutilsText($result), "empty:\ntotal 0\n") !== false);
 });
-$tests['separate directory totals agree with their metadata'] = fn() => fixture(function ($base) {
-    mkdir($base . '/a'); mkdir($base . '/b');
+$tests['separate directory totals agree with their metadata'] = fn () => fixture(function ($base) {
+    mkdir($base . '/a');
+    mkdir($base . '/b');
     file_put_contents($base . '/a/one', str_repeat('x', 8192));
     file_put_contents($base . '/b/two', 'y');
     $result = ls(parseCommand('ls -l a b'), $base);
     foreach ($result['data']['directories'] as $dir) {
-        if ($dir['entries'][0]['blocks'] !== null) same($dir['entries'][0]['blocks'], $dir['blocks']);
-        else same(null, $dir['blocks']);
+        if ($dir['entries'][0]['blocks'] !== null) {
+            same($dir['entries'][0]['blocks'], $dir['blocks']);
+        } else {
+            same(null, $dir['blocks']);
+        }
     }
 });
-$tests['broken and ordinary links retain link metadata'] = fn() => fixture(function ($base) {
+$tests['broken and ordinary links retain link metadata'] = fn () => fixture(function ($base) {
     symlinkSupport($base);
     file_put_contents($base . '/target', str_repeat('x', 100));
     symlink('target', $base . '/link');
     symlink('missing', $base . '/broken');
     $result = ls(parseCommand('ls -l link broken'), $base);
     same(0, $result['status']);
-    foreach ($result['data']['files'] as $entry) same('l', $entry['permissions'][0]);
+    foreach ($result['data']['files'] as $entry) {
+        same('l', $entry['permissions'][0]);
+    }
     check(strpos(coreutilsText($result), 'broken -> missing') !== false);
     check(strpos(coreutilsText($result), 'link -> target') !== false);
     same(6, $result['data']['files'][1]['size']);
 });
-$tests['directory symlinks follow only in short listing or with trailing slash'] = fn() => fixture(function ($base) {
+$tests['directory symlinks follow only in short listing or with trailing slash'] = fn () => fixture(function ($base) {
     symlinkSupport($base);
-    mkdir($base . '/target'); file_put_contents($base . '/target/item', 'x');
+    mkdir($base . '/target');
+    file_put_contents($base . '/target/item', 'x');
     symlink('target', $base . '/link');
     same(['item'], names(ls(parseCommand('ls link'), $base)));
     same('l', ls(parseCommand('ls -l link'), $base)['data']['files'][0]['permissions'][0]);
     same(['item'], names(ls(parseCommand('ls -l link/'), $base)));
 });
-$tests['path resolution preserves symlink/.. semantics'] = fn() => fixture(function ($base) {
+$tests['path resolution preserves symlink/.. semantics'] = fn () => fixture(function ($base) {
     symlinkSupport($base);
-    mkdir($base . '/real'); mkdir($base . '/real/child');
+    mkdir($base . '/real');
+    mkdir($base . '/real/child');
     file_put_contents($base . '/real/marker', 'ok');
     symlink('real/child', $base . '/link');
     $result = ls(parseCommand('ls -l link/../marker'), $base);
     same(0, $result['status']);
     same(2, $result['data']['files'][0]['size']);
 });
-$tests['mkdir follows directory links and rejects dangling links'] = fn() => fixture(function ($base) {
+$tests['mkdir follows directory links and rejects dangling links'] = fn () => fixture(function ($base) {
     symlinkSupport($base);
-    mkdir($base . '/real'); symlink('real', $base . '/link'); symlink('absent', $base . '/broken');
+    mkdir($base . '/real');
+    symlink('real', $base . '/link');
+    symlink('absent', $base . '/broken');
     same(0, _mkdir(parseCommand('mkdir -p link/new'), $base)['status']);
     check(is_dir($base . '/real/new'));
     same(1, _mkdir(parseCommand('mkdir -p broken'), $base)['status']);
     check(is_link($base . '/broken'));
 });
-$tests['ls errors are reusable and do not leak into a later call'] = fn() => fixture(function ($base) {
+$tests['ls errors are reusable and do not leak into a later call'] = fn () => fixture(function ($base) {
     file_put_contents($base . '/present', 'ok');
     $first = ls(parseCommand('ls -l missing present'), $base);
     same(1, $first['status']);
@@ -300,23 +334,24 @@ $tests['ls errors are reusable and do not leak into a later call'] = fn() => fix
     same(0, $second['status']);
     same(['present'], names($second));
 });
-$tests['unreadable directory returns an error without breaking the caller'] = fn() => fixture(function ($base) {
+$tests['unreadable directory returns an error without breaking the caller'] = fn () => fixture(function ($base) {
     skipUnless(DIRECTORY_SEPARATOR !== '\\', 'POSIX permission semantics are unavailable on Windows');
-    mkdir($base . '/denied'); chmod($base . '/denied', 0000);
-    $readable = coreutilsFsCall(fn() => scandir($base . '/denied'));
+    mkdir($base . '/denied');
+    chmod($base . '/denied', 0000);
+    $readable = coreutilsFsCall(fn () => scandir($base . '/denied'));
     skipUnless($readable === false, 'process can bypass filesystem permissions');
     $result = ls(parseCommand('ls -l denied'), $base);
     same(1, $result['status']);
     same(false, $result['data']['directories'][0]['readable']);
 });
-$tests['HTML renderer escapes errors and preserves raw result data'] = fn() => fixture(function ($base) {
+$tests['HTML renderer escapes errors and preserves raw result data'] = fn () => fixture(function ($base) {
     $result = ls(['args' => ['<img src=x onerror=alert(1)>']], $base);
     $html = coreutilsHtml($result);
     check(strpos($html, '<img') === false);
     check(strpos($html, '&lt;img') !== false);
     check(strpos($result['errors'][0]['message'], '<img') !== false);
 });
-$tests['HTML renderer escapes real file names and link targets'] = fn() => fixture(function ($base) {
+$tests['HTML renderer escapes real file names and link targets'] = fn () => fixture(function ($base) {
     skipUnless(DIRECTORY_SEPARATOR !== '\\', 'Windows forbids angle brackets in filenames');
     $name = '<img src=x onerror=alert(1)>';
     file_put_contents($base . '/' . $name, 'x');
@@ -328,12 +363,12 @@ $tests['HTML renderer escapes real file names and link targets'] = fn() => fixtu
     symlink($name, $base . '/link');
     check(strpos(coreutilsHtml(ls(parseCommand('ls -l link'), $base)), '<img') === false);
 });
-$tests['text renderer quotes embedded newlines'] = fn() => fixture(function ($base) {
+$tests['text renderer quotes embedded newlines'] = fn () => fixture(function ($base) {
     skipUnless(DIRECTORY_SEPARATOR !== '\\', 'Windows forbids newline filenames');
     file_put_contents($base . "/a\nb", 'x');
     same('"a\\nb"' . "\n", coreutilsText(ls(parseCommand('ls'), $base)));
 });
-$tests['long output works without assuming intl or POSIX'] = fn() => fixture(function ($base) {
+$tests['long output works without assuming intl or POSIX'] = fn () => fixture(function ($base) {
     file_put_contents($base . '/data', 'x');
     foreach (['ls -l', 'ls -o', 'ls -g', 'ls -lG', 'ls -go', 'ls -lh', 'ls -l --si'] as $command) {
         $result = ls(parseCommand($command), $base, 'pt_BR');
@@ -358,18 +393,24 @@ $tests['help succeeds without operands or filesystem access'] = function () {
 };
 $tests['filesystem warning capture restores the caller error handler'] = function () {
     $called = false;
-    set_error_handler(function () use (&$called) { $called = true; return true; });
+    set_error_handler(function () use (&$called) {
+        $called = true;
+        return true;
+    });
     try {
         try {
-            coreutilsFsCall(function () { throw new RuntimeException('probe'); });
-        } catch (RuntimeException $expected) {}
+            coreutilsFsCall(function () {
+                throw new RuntimeException('probe');
+            });
+        } catch (RuntimeException $expected) {
+        }
         trigger_error('handler probe', E_USER_WARNING);
         same(true, $called);
     } finally {
         restore_error_handler();
     }
 };
-$tests['Unix cwd ending in a backslash remains intact'] = fn() => fixture(function ($base) {
+$tests['Unix cwd ending in a backslash remains intact'] = fn () => fixture(function ($base) {
     skipUnless(DIRECTORY_SEPARATOR !== '\\', 'Unix filename test');
     mkdir($base . '/tail\\');
     same(0, _mkdir(parseCommand('mkdir inside'), $base . '/tail\\')['status']);

@@ -1,4 +1,5 @@
 <?php
+
 # PHP Coreutils
 # A lightweight, pure-PHP implementation of classic Unix core utilities,
 # designed for portability and environments without shell access.
@@ -28,7 +29,8 @@
 
 require_once __DIR__ . '/../ls.php';
 
-function coreutilsHumanSize($bytes, bool $si = false): string {
+function coreutilsHumanSize($bytes, bool $si = false): string
+{
     $base = $si ? 1000 : 1024;
     $units = $si ? ['', 'k', 'M', 'G', 'T', 'P', 'E'] : ['', 'K', 'M', 'G', 'T', 'P', 'E'];
     $i = 0;
@@ -48,19 +50,26 @@ function coreutilsHumanSize($bytes, bool $si = false): string {
     return number_format($rounded, $digits, '.', '') . $units[$i];
 }
 
-function coreutilsQuoteName(string $name): string {
-    if (!preg_match('/[\s\x00-\x1f\x7f"\'\\\\]/', $name)) return $name;
+function coreutilsQuoteName(string $name): string
+{
+    if (!preg_match('/[\s\x00-\x1f\x7f"\'\\\\]/', $name)) {
+        return $name;
+    }
     return json_encode($name, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
 }
 
-function coreutilsIdentity(int $id, bool $group, array &$cache): string {
-    if (isset($cache[$id])) return $cache[$id];
+function coreutilsIdentity(int $id, bool $group, array &$cache): string
+{
+    if (isset($cache[$id])) {
+        return $cache[$id];
+    }
     $function = $group ? 'posix_getgrgid' : 'posix_getpwuid';
-    $record = function_exists($function) ? coreutilsFsCall(fn() => $function($id)) : false;
+    $record = function_exists($function) ? coreutilsFsCall(fn () => $function($id)) : false;
     return $cache[$id] = $record === false ? (string) $id : (string) $record['name'];
 }
 
-function coreutilsFormatEntries(array $entries, array $settings, $formatter, array &$users, array &$groups): array {
+function coreutilsFormatEntries(array $entries, array $settings, $formatter, array &$users, array &$groups): array
+{
     $rows = [];
     $widths = [];
     foreach ($entries as $entry) {
@@ -70,15 +79,23 @@ function coreutilsFormatEntries(array $entries, array $settings, $formatter, arr
             continue;
         }
         $row = [$entry['permissions'], (string) $entry['nlink']];
-        if ($settings['owner']) $row[] = coreutilsIdentity($entry['uid'], false, $users);
-        if ($settings['group']) $row[] = coreutilsIdentity($entry['gid'], true, $groups);
+        if ($settings['owner']) {
+            $row[] = coreutilsIdentity($entry['uid'], false, $users);
+        }
+        if ($settings['group']) {
+            $row[] = coreutilsIdentity($entry['gid'], true, $groups);
+        }
         $row[] = $settings['size'] === 'bytes' ? (string) $entry['size']
             : coreutilsHumanSize($entry['size'], $settings['size'] === 'si');
         $row[] = coreutilsFormatDate($entry['mtime'], $formatter);
-        if ($entry['target'] !== null) $name .= ' -> ' . coreutilsQuoteName($entry['target']);
+        if ($entry['target'] !== null) {
+            $name .= ' -> ' . coreutilsQuoteName($entry['target']);
+        }
         $row[] = $name;
         foreach ($row as $i => $cell) {
-            if ($i !== count($row) - 1) $widths[$i] = max($widths[$i] ?? 0, strlen($cell));
+            if ($i !== count($row) - 1) {
+                $widths[$i] = max($widths[$i] ?? 0, strlen($cell));
+            }
         }
         $rows[] = $row;
     }
@@ -94,9 +111,12 @@ function coreutilsFormatEntries(array $entries, array $settings, $formatter, arr
 }
 
 /** Format both diagnostics and output as plain text; the original result stays reusable. */
-function coreutilsText(array $result): string {
+function coreutilsText(array $result): string
+{
     $lines = array_column($result['errors'], 'message');
-    if ($result['help'] !== null) return implode("\n", $lines) . ($lines ? "\n" : '') . $result['help'];
+    if ($result['help'] !== null) {
+        return implode("\n", $lines) . ($lines ? "\n" : '') . $result['help'];
+    }
     if ($result['command'] === 'ls') {
         $settings = coreutilsLsSettings($result['options']);
         $formatter = $settings['long'] ? coreutilsDateFormatter($result['locale'] ?? null) : null;
@@ -106,9 +126,15 @@ function coreutilsText(array $result): string {
         $lines = array_merge($lines, coreutilsFormatEntries($files, $settings, $formatter, $users, $groups));
         $headers = count($files) + count($directories) > 1;
         foreach ($directories as $index => $directory) {
-            if ($files || $index > 0) $lines[] = '';
-            if ($headers) $lines[] = coreutilsQuoteName($directory['name']) . ':';
-            if (!$directory['readable']) continue;
+            if ($files || $index > 0) {
+                $lines[] = '';
+            }
+            if ($headers) {
+                $lines[] = coreutilsQuoteName($directory['name']) . ':';
+            }
+            if (!$directory['readable']) {
+                continue;
+            }
             if ($settings['long']) {
                 $blocks = $directory['blocks'];
                 $total = $blocks === null ? '?' : ($settings['size'] === 'bytes'
@@ -142,7 +168,8 @@ function coreutilsText(array $result): string {
 }
 
 /** Escape the complete presentation, including names, link targets and errors. */
-function coreutilsHtml(array $result): string {
+function coreutilsHtml(array $result): string
+{
     return '<pre style="margin: 0;">'
         . htmlspecialchars(coreutilsText($result), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</pre>';
 }

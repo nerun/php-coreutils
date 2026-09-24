@@ -13,15 +13,17 @@ if (!isset($_SESSION['cwd']) || !is_string($_SESSION['cwd']) || $_SESSION['cwd']
     $_SESSION['cwd'] = __DIR__;
 }
 
-$debug = False;
+$debug = false;
 $cwd = $_SESSION['cwd'];
 session_write_close();
 
-function escapeHtml(string $text): string {
+function escapeHtml(string $text): string
+{
     return htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
-function prompt(string $input, string $cwd): void {
+function prompt(string $input, string $cwd): void
+{
     echo '<div style="
                 display: inline-block;
                 margin-top: 1px;
@@ -74,10 +76,10 @@ function prompt(string $input, string $cwd): void {
 
     // The commands return data; the formatter produces escaped HTML output.
     echo coreutilsHtml($result);
-    
+
     global $debug;
 
-    if ( $debug ) {
+    if ($debug) {
         echo '<pre class="debug"><b>DEBUG: $args</b>' . "\n\n";
         echo escapeHtml(print_r($args, true));
         echo "\n<b>Status:</b> " . (int) $result['status'];
@@ -111,22 +113,22 @@ $locales = str_replace(';', ";\n", (string) setlocale(LC_ALL, 0));
 
         <?php
             prompt('ls -lha --group-directories-first', $cwd);
-            prompt('mkdir -p TESTE/a/c/d/e', $cwd);
-            prompt('find TESTE', $cwd);
-            prompt('mv TESTE/a TESTE/x', $cwd);
-            prompt('find TESTE', $cwd);
-            prompt('cp -r ./TESTE/x/c ./TESTE-c', $cwd);
-            prompt('ls', $cwd);
-            prompt('find -type d TESTE-c', $cwd);
-            prompt('rm -r TESTE TESTE-c', $cwd);
-            prompt('ls', $cwd);
+prompt('mkdir -p TESTE/a/c/d/e', $cwd);
+prompt('find TESTE', $cwd);
+prompt('mv TESTE/a TESTE/x', $cwd);
+prompt('find TESTE', $cwd);
+prompt('cp -r ./TESTE/x/c ./TESTE-c', $cwd);
+prompt('ls', $cwd);
+prompt('find -type d TESTE-c', $cwd);
+prompt('rm -r TESTE TESTE-c', $cwd);
+prompt('ls', $cwd);
 
-            if ( $debug ) {
-                echo '<hr>';
-                echo '<h1>DEBUG</h1>';
-                echo '<div>Current Working Directory (CWD) = ' . escapeHtml($cwd). '</div>';
-                echo '<pre>' . escapeHtml($locales) . '</pre>';
-            }
-        ?>
+if ($debug) {
+    echo '<hr>';
+    echo '<h1>DEBUG</h1>';
+    echo '<div>Current Working Directory (CWD) = ' . escapeHtml($cwd). '</div>';
+    echo '<pre>' . escapeHtml($locales) . '</pre>';
+}
+?>
     </body>
 </html>

@@ -23,8 +23,9 @@ $tests['find rejects invalid predicates and types before traversal'] = function 
         same(2, find($input)['status']);
     }
 };
-$tests['find defaults to dot and traverses hidden nested entries in order'] = fn() => fixture(function ($base) {
-    mkdir($base . '/dir'); mkdir($base . '/dir/empty');
+$tests['find defaults to dot and traverses hidden nested entries in order'] = fn () => fixture(function ($base) {
+    mkdir($base . '/dir');
+    mkdir($base . '/dir/empty');
     file_put_contents($base . '/dir/item', 'x');
     file_put_contents($base . '/.hidden', 'x');
     $cwd = getcwd();
@@ -34,22 +35,26 @@ $tests['find defaults to dot and traverses hidden nested entries in order'] = fn
     same($cwd, getcwd());
     same(0, $result['status']);
     $expected = ['.', './.hidden', './dir', './dir/empty', './dir/item'];
-    $expected = array_map(fn($name) => str_replace('/', DIRECTORY_SEPARATOR, $name), $expected);
+    $expected = array_map(fn ($name) => str_replace('/', DIRECTORY_SEPARATOR, $name), $expected);
     same($expected, array_column($result['data']['entries'], 'name'));
     same(['d', 'f', 'd', 'd', 'f'], array_column($result['data']['entries'], 'type'));
     same(implode("\n", $expected) . "\n", coreutilsText($result));
-    same(['./.hidden', './dir/item'], array_map(fn($entry) => str_replace(DIRECTORY_SEPARATOR, '/', $entry['name']),
-        find(parseCommand('find -type f'), $base)['data']['entries']));
+    same(['./.hidden', './dir/item'], array_map(
+        fn ($entry) => str_replace(DIRECTORY_SEPARATOR, '/', $entry['name']),
+        find(parseCommand('find -type f'), $base)['data']['entries']
+    ));
     same(3, count(find(parseCommand('find -type d'), $base)['data']['entries']));
     same([], find(parseCommand('find -type l'), $base)['data']['entries']);
     chdir($base);
     same($result['data'], find(parseCommand('find'))['data']);
 });
-$tests['find lists links including broken links without following directory cycles'] = fn() => fixture(function ($base) {
+$tests['find lists links including broken links without following directory cycles'] = fn () => fixture(function ($base) {
     symlinkSupport($base);
-    mkdir($base . '/dir'); file_put_contents($base . '/file', 'x');
+    mkdir($base . '/dir');
+    file_put_contents($base . '/file', 'x');
     symlink('../', $base . '/dir/cycle');
-    symlink('missing', $base . '/broken'); symlink('file', $base . '/file-link');
+    symlink('missing', $base . '/broken');
+    symlink('file', $base . '/file-link');
     symlink('dir', $base . '/dir-link');
     same(7, count(find(parseCommand('find'), $base)['data']['entries']));
     foreach (['f' => 1, 'd' => 2, 'l' => 4, 'f,l' => 5, 'd,l' => 6, 'f,d,l' => 7, 'l,f,l' => 5] as $types => $count) {
@@ -61,10 +66,12 @@ $tests['find lists links including broken links without following directory cycl
     same(['dir-link', 'broken'], array_column($result['data']['entries'], 'name'));
     same(1, find(parseCommand('find dir-link/'), $base)['status']);
 });
-$tests['find supports multiple roots absolute paths and partial failures'] = fn() => fixture(function ($base) {
-    mkdir($base . '/empty'); file_put_contents($base . '/file', 'x');
+$tests['find supports multiple roots absolute paths and partial failures'] = fn () => fixture(function ($base) {
+    mkdir($base . '/empty');
+    file_put_contents($base . '/file', 'x');
     $result = find(['args' => ['missing', 'file', $base . '/empty']], $base);
-    same(1, $result['status']); same(1, count($result['errors']));
+    same(1, $result['status']);
+    same(1, count($result['errors']));
     same(['file', $base . '/empty'], array_column($result['data']['entries'], 'name'));
     same(coreutilsResolvePath('file', $base), $result['data']['entries'][0]['path']);
     same(0, find(parseCommand('find empty/'), $base)['status']);
@@ -72,7 +79,7 @@ $tests['find supports multiple roots absolute paths and partial failures'] = fn(
     same(1, find(parseCommand('find'), $base . '/missing')['status']);
     same(0, find(parseCommand('find file'), $base)['status']);
 });
-$tests['find handles quoted dash-prefixed names and escapes HTML'] = fn() => fixture(function ($base) {
+$tests['find handles quoted dash-prefixed names and escapes HTML'] = fn () => fixture(function ($base) {
     file_put_contents($base . '/-type', 'x');
     file_put_contents($base . '/two words', 'x');
     same(['-type'], array_column(find(parseCommand('find -- -type'), $base)['data']['entries'], 'name'));
@@ -84,9 +91,11 @@ $tests['find handles quoted dash-prefixed names and escapes HTML'] = fn() => fix
     check(strpos(coreutilsHtml($result), '&lt;tag&gt;') !== false);
     check(strpos(coreutilsHtml($result), '<tag>') === false);
 });
-$tests['find reports unreadable directories and continues other roots'] = fn() => fixture(function ($base) {
-    mkdir($base . '/denied'); mkdir($base . '/good'); chmod($base . '/denied', 0000);
-    skipUnless(coreutilsFsCall(fn() => scandir($base . '/denied')) === false, 'process can bypass filesystem permissions');
+$tests['find reports unreadable directories and continues other roots'] = fn () => fixture(function ($base) {
+    mkdir($base . '/denied');
+    mkdir($base . '/good');
+    chmod($base . '/denied', 0000);
+    skipUnless(coreutilsFsCall(fn () => scandir($base . '/denied')) === false, 'process can bypass filesystem permissions');
     $result = find(parseCommand('find denied good -type d'), $base);
     same(1, $result['status']);
     same(['denied', 'good'], array_column($result['data']['entries'], 'name'));

@@ -1,4 +1,5 @@
 <?php
+
 # PHP Coreutils
 # A lightweight, pure-PHP implementation of classic Unix core utilities,
 # designed for portability and environments without shell access.
@@ -30,31 +31,45 @@ require_once __DIR__ . '/lib/parser.php';
 require_once __DIR__ . '/lib/filesystem.php';
 
 /** Create missing parents with default permissions, retaining owner write/search access. */
-function coreutilsMakeParents(string $path, array &$created, ?string &$warning): bool {
-    if (coreutilsIsDirectory($path)) return true;
+function coreutilsMakeParents(string $path, array &$created, ?string &$warning): bool
+{
+    if (coreutilsIsDirectory($path)) {
+        return true;
+    }
     $parent = dirname($path);
-    if ($parent !== $path && !coreutilsMakeParents($parent, $created, $warning)) return false;
-    if (coreutilsIsDirectory($path)) return true;
-    if (!coreutilsFsCall(fn() => mkdir($path, 0777), $warning)) {
+    if ($parent !== $path && !coreutilsMakeParents($parent, $created, $warning)) {
+        return false;
+    }
+    if (coreutilsIsDirectory($path)) {
+        return true;
+    }
+    if (!coreutilsFsCall(fn () => mkdir($path, 0777), $warning)) {
         return coreutilsIsDirectory($path); // Another caller may have created the parent.
     }
     $created[] = $path;
     $stat = coreutilsLstat($path, $warning);
-    if ($stat === false) return false;
+    if ($stat === false) {
+        return false;
+    }
     if (DIRECTORY_SEPARATOR !== '\\' && ($stat['mode'] & 0300) !== 0300) {
         $mode = ($stat['mode'] & 07777) | 0300;
-        return coreutilsFsCall(fn() => chmod($path, $mode), $warning);
+        return coreutilsFsCall(fn () => chmod($path, $mode), $warning);
     }
     return true;
 }
 
 /** Return created/existing paths, errors and status. No output, chdir() or session access. */
-function _mkdir(array $input, ?string $cwd = null): array {
+function _mkdir(array $input, ?string $cwd = null): array
+{
     $result = coreutilsResult('mkdir', ['created' => [], 'existing' => []]);
     [$options, $args, $errors] = coreutilsValidateInput('mkdir', $input);
     $result['options'] = $options;
-    foreach ($errors as $error) coreutilsAddError($result, $error, 2);
-    if ($result['status'] !== 0) return $result;
+    foreach ($errors as $error) {
+        coreutilsAddError($result, $error, 2);
+    }
+    if ($result['status'] !== 0) {
+        return $result;
+    }
     if ($options['help'] ?? false) {
         $result['help'] = coreutilsHelp('mkdir');
         return $result;
@@ -85,7 +100,7 @@ function _mkdir(array $input, ?string $cwd = null): array {
             coreutilsAddError($result, coreutilsFsError('mkdir', 'create directory', $arg, $warning));
             continue;
         }
-        if (!coreutilsFsCall(fn() => mkdir($path, $mode), $warning)) {
+        if (!coreutilsFsCall(fn () => mkdir($path, $mode), $warning)) {
             if ($recursive && coreutilsIsDirectory($path)) {
                 $result['data']['existing'][] = $path;
             } else {
@@ -95,7 +110,7 @@ function _mkdir(array $input, ?string $cwd = null): array {
         }
         $result['data']['created'][] = $path;
         // Only an explicit -m overrides the umask. Never chmod an existing directory.
-        if ($explicitMode && !coreutilsFsCall(fn() => chmod($path, $mode), $warning)) {
+        if ($explicitMode && !coreutilsFsCall(fn () => chmod($path, $mode), $warning)) {
             coreutilsAddError($result, coreutilsFsError('mkdir', 'set permissions on', $arg, $warning));
         }
     }

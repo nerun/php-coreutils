@@ -1,4 +1,5 @@
 <?php
+
 # PHP Coreutils
 # A lightweight, pure-PHP implementation of classic Unix core utilities,
 # designed for portability and environments without shell access.
@@ -27,11 +28,13 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 /** Build an error without producing output. */
-function coreutilsError(string $command, string $code, string $message, ?string $path = null): array {
+function coreutilsError(string $command, string $code, string $message, ?string $path = null): array
+{
     return ['code' => $code, 'message' => $command . ': ' . $message, 'path' => $path];
 }
 
-function coreutilsResult(string $command, array $data = []): array {
+function coreutilsResult(string $command, array $data = []): array
+{
     return [
         'command' => $command,
         'status' => 0,
@@ -42,13 +45,15 @@ function coreutilsResult(string $command, array $data = []): array {
     ];
 }
 
-function coreutilsAddError(array &$result, array $error, int $status = 1): void {
+function coreutilsAddError(array &$result, array $error, int $status = 1): void
+{
     $result['errors'][] = $error;
     $result['status'] = max($result['status'], $status);
 }
 
 /** Capture filesystem warnings locally; always restore the caller's handler. */
-function coreutilsFsCall(callable $operation, ?string &$warning = null) {
+function coreutilsFsCall(callable $operation, ?string &$warning = null)
+{
     $warning = null;
     set_error_handler(function ($severity, $message) use (&$warning) {
         $warning = $message;
@@ -61,9 +66,14 @@ function coreutilsFsCall(callable $operation, ?string &$warning = null) {
     }
 }
 
-function coreutilsFsError(string $command, string $operation, string $path, ?string $warning): array {
+function coreutilsFsError(string $command, string $operation, string $path, ?string $warning): array
+{
     // Keep the actual diagnostic; do not label every failure "Permission denied".
     $detail = $warning === null ? 'Operation failed' : preg_replace('/^[^:]+\(\):\s*/', '', $warning);
-    return coreutilsError($command, 'filesystem-error',
-        "cannot $operation '$path': $detail", $path);
+    return coreutilsError(
+        $command,
+        'filesystem-error',
+        "cannot $operation '$path': $detail",
+        $path
+    );
 }

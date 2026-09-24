@@ -1,4 +1,5 @@
 <?php
+
 # PHP Coreutils
 # A lightweight, pure-PHP implementation of classic Unix core utilities,
 # designed for portability and environments without shell access.
@@ -27,7 +28,8 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 /** Canonical name => [short spelling, long spelling, requires a value]. */
-function coreutilsOptionDefinitions(string $command): array {
+function coreutilsOptionDefinitions(string $command): array
+{
     $common = ['help' => [null, 'help', false]];
     if ($command === 'find') {
         return ['type' => ['type', 'type', true]] + $common;
@@ -80,7 +82,8 @@ function coreutilsOptionDefinitions(string $command): array {
     return [];
 }
 
-function coreutilsHelp(string $command): string {
+function coreutilsHelp(string $command): string
+{
     if ($command === 'find') {
         return "Usage: find [PATH]... [-type TYPES]\n"
             . "Recursively list entries, including starting paths and hidden names.\n"

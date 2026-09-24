@@ -1,4 +1,5 @@
 <?php
+
 # PHP Coreutils
 # A lightweight, pure-PHP implementation of classic Unix core utilities,
 # designed for portability and environments without shell access.
@@ -30,12 +31,17 @@ require_once __DIR__ . '/lib/parser.php';
 require_once __DIR__ . '/lib/filesystem.php';
 
 /** Rename local entries without dereferencing source links or copying across devices. */
-function mv(array $input, ?string $cwd = null): array {
+function mv(array $input, ?string $cwd = null): array
+{
     $result = coreutilsResult('mv', ['moved' => [], 'skipped' => []]);
     [$options, $args, $errors] = coreutilsValidateInput('mv', $input);
     $result['options'] = $options;
-    foreach ($errors as $error) coreutilsAddError($result, $error, 2);
-    if ($errors) return $result;
+    foreach ($errors as $error) {
+        coreutilsAddError($result, $error, 2);
+    }
+    if ($errors) {
+        return $result;
+    }
     if ($options['help'] ?? false) {
         $result['help'] = coreutilsHelp('mv');
         return $result;
@@ -51,7 +57,9 @@ function mv(array $input, ?string $cwd = null): array {
     }
     $noClobber = false;
     foreach ($options as $name => $enabled) {
-        if ($enabled && ($name === 'force' || $name === 'no-clobber')) $noClobber = $name === 'no-clobber';
+        if ($enabled && ($name === 'force' || $name === 'no-clobber')) {
+            $noClobber = $name === 'no-clobber';
+        }
     }
     $separators = DIRECTORY_SEPARATOR === '\\' ? '/\\' : '/';
     $destination = coreutilsResolvePath(array_pop($args), $cwd);
@@ -77,8 +85,8 @@ function mv(array $input, ?string $cwd = null): array {
             continue;
         }
         $target = $directory ? rtrim($destination, $separators) . DIRECTORY_SEPARATOR . $name : $destination;
-        $parent = coreutilsFsCall(fn() => realpath(dirname($target)));
-        $sourceParent = coreutilsFsCall(fn() => realpath(dirname($source)));
+        $parent = coreutilsFsCall(fn () => realpath(dirname($target)));
+        $sourceParent = coreutilsFsCall(fn () => realpath(dirname($source)));
         if ($parent === false || !coreutilsIsDirectory($parent)) {
             coreutilsAddError($result, coreutilsError('mv', 'invalid-parent', "destination parent does not exist: '$target'", $target));
             continue;
@@ -101,7 +109,7 @@ function mv(array $input, ?string $cwd = null): array {
             continue;
         }
         if ($isDirectory) {
-            $canonical = coreutilsFsCall(fn() => realpath($source));
+            $canonical = coreutilsFsCall(fn () => realpath($source));
             $prefix = rtrim((string) $canonical, $separators) . DIRECTORY_SEPARATOR;
             $comparisonParent = $parent . DIRECTORY_SEPARATOR;
             if (DIRECTORY_SEPARATOR === '\\') {
@@ -117,12 +125,12 @@ function mv(array $input, ?string $cwd = null): array {
             coreutilsAddError($result, coreutilsError('mv', 'type-mismatch', "cannot replace '$target' with a different entry type", $target));
             continue;
         }
-        $parentStat = coreutilsFsCall(fn() => stat($parent));
+        $parentStat = coreutilsFsCall(fn () => stat($parent));
         if ($parentStat === false || $stat['dev'] !== $parentStat['dev']) {
             coreutilsAddError($result, coreutilsError('mv', 'cross-device', "cannot move '$operand': cross-filesystem moves are not supported", $operand));
             continue;
         }
-        if (!coreutilsFsCall(fn() => rename($source, $target), $warning)) {
+        if (!coreutilsFsCall(fn () => rename($source, $target), $warning)) {
             coreutilsAddError($result, coreutilsFsError('mv', 'move to ' . $target, $operand, $warning));
             continue;
         }

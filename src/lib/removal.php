@@ -1,4 +1,5 @@
 <?php
+
 # PHP Coreutils
 # A lightweight, pure-PHP implementation of classic Unix core utilities,
 # designed for portability and environments without shell access.
@@ -30,23 +31,39 @@ require_once __DIR__ . '/parser.php';
 require_once __DIR__ . '/filesystem.php';
 
 /** Prove absence by listing an accessible parent; do not hide permission errors under -f. */
-function coreutilsRemovalMissing(string $path): bool {
+function coreutilsRemovalMissing(string $path): bool
+{
     $parent = dirname($path);
-    if ($parent === $path) return false;
-    if (coreutilsLstat($parent) === false) return coreutilsRemovalMissing($parent);
-    if (!coreutilsIsDirectory($parent)) return false;
-    $names = coreutilsFsCall(fn() => scandir($parent));
+    if ($parent === $path) {
+        return false;
+    }
+    if (coreutilsLstat($parent) === false) {
+        return coreutilsRemovalMissing($parent);
+    }
+    if (!coreutilsIsDirectory($parent)) {
+        return false;
+    }
+    $names = coreutilsFsCall(fn () => scandir($parent));
     return $names !== false && !in_array(basename($path), $names, true);
 }
 
 /** Refuse roots, dot operands, the explicit cwd and its ancestors. Final links stay links. */
-function coreutilsRemovalProtected(string $path, string $cwd, bool $directory): bool {
+function coreutilsRemovalProtected(string $path, string $cwd, bool $directory): bool
+{
     $name = basename($path);
-    if ($path === '' || $name === '.' || $name === '..') return true;
-    if (!$directory) return false;
-    $canonical = coreutilsFsCall(fn() => realpath($path));
-    if ($canonical === false) return true;
-    if (dirname($canonical) === $canonical) return true;
+    if ($path === '' || $name === '.' || $name === '..') {
+        return true;
+    }
+    if (!$directory) {
+        return false;
+    }
+    $canonical = coreutilsFsCall(fn () => realpath($path));
+    if ($canonical === false) {
+        return true;
+    }
+    if (dirname($canonical) === $canonical) {
+        return true;
+    }
     if (DIRECTORY_SEPARATOR === '\\') {
         $canonical = strtolower(str_replace('\\', '/', $canonical));
         $cwd = strtolower(str_replace('\\', '/', $cwd));
@@ -54,7 +71,8 @@ function coreutilsRemovalProtected(string $path, string $cwd, bool $directory): 
     return $canonical === $cwd || strpos($cwd, rtrim($canonical, '/') . '/') === 0;
 }
 
-function coreutilsRemoveEntry(string $path, string $cwd, array &$result): void {
+function coreutilsRemoveEntry(string $path, string $cwd, array &$result): void
+{
     $command = $result['command'];
     $separators = DIRECTORY_SEPARATOR === '\\' ? '/\\' : '/';
     $trimmed = rtrim($path, $separators);
@@ -86,19 +104,23 @@ function coreutilsRemoveEntry(string $path, string $cwd, array &$result): void {
             coreutilsAddError($result, coreutilsError($command, 'recursive-required', "cannot remove directory '$path'; use -r", $path));
             return;
         }
-        $names = coreutilsFsCall(fn() => scandir($trimmed), $warning);
+        $names = coreutilsFsCall(fn () => scandir($trimmed), $warning);
         if ($names === false) {
             coreutilsAddError($result, coreutilsFsError($command, 'read directory', $path, $warning));
             return;
         }
         $errorCount = count($result['errors']);
         foreach ($names as $name) {
-            if ($name !== '.' && $name !== '..') coreutilsRemoveEntry($trimmed . DIRECTORY_SEPARATOR . $name, $cwd, $result);
+            if ($name !== '.' && $name !== '..') {
+                coreutilsRemoveEntry($trimmed . DIRECTORY_SEPARATOR . $name, $cwd, $result);
+            }
         }
-        if (count($result['errors']) !== $errorCount) return;
+        if (count($result['errors']) !== $errorCount) {
+            return;
+        }
     }
-    $success = $directory ? coreutilsFsCall(fn() => rmdir($trimmed), $warning)
-        : coreutilsFsCall(fn() => unlink($trimmed), $warning);
+    $success = $directory ? coreutilsFsCall(fn () => rmdir($trimmed), $warning)
+        : coreutilsFsCall(fn () => unlink($trimmed), $warning);
     if (!$success) {
         coreutilsAddError($result, coreutilsFsError($command, 'remove', $path, $warning));
         return;
@@ -107,12 +129,17 @@ function coreutilsRemoveEntry(string $path, string $cwd, array &$result): void {
     $result['data']['removed'][] = $trimmed;
 }
 
-function coreutilsRemove(string $command, array $input, ?string $cwd): array {
+function coreutilsRemove(string $command, array $input, ?string $cwd): array
+{
     $result = coreutilsResult($command, ['removed' => [], 'skipped' => []]);
     [$options, $args, $errors] = coreutilsValidateInput($command, $input);
     $result['options'] = $options;
-    foreach ($errors as $error) coreutilsAddError($result, $error, 2);
-    if ($errors) return $result;
+    foreach ($errors as $error) {
+        coreutilsAddError($result, $error, 2);
+    }
+    if ($errors) {
+        return $result;
+    }
     if ($options['help'] ?? false) {
         $result['help'] = coreutilsHelp($command);
         return $result;
@@ -134,10 +161,14 @@ function coreutilsRemove(string $command, array $input, ?string $cwd): array {
             $count = count($result['data']['removed']);
             coreutilsRemoveEntry($path, $cwd, $result);
             if ($command !== 'rmdir' || !($options['parents'] ?? false)
-                || count($result['data']['removed']) === $count) break;
+                || count($result['data']['removed']) === $count) {
+                break;
+            }
             $parent = dirname(rtrim($path, DIRECTORY_SEPARATOR === '\\' ? '/\\' : '/'));
             // Parent removal stops before the cwd or filesystem root, including aliases.
-            if (coreutilsRemovalProtected($parent, $cwd, true)) break;
+            if (coreutilsRemovalProtected($parent, $cwd, true)) {
+                break;
+            }
             $path = $parent;
         }
     }
