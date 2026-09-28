@@ -1,4 +1,5 @@
 <?php
+
 # PHP Coreutils
 # A lightweight, pure-PHP implementation of classic Unix core utilities,
 # designed for portability and environments without shell access.
@@ -30,7 +31,8 @@ require_once __DIR__ . '/errorHandling.php';
 require_once __DIR__ . '/options.php';
 
 /** Tokenize the supported quoting syntax; this does not execute or expand shell input. */
-function coreutilsTokenize(string $input): array {
+function coreutilsTokenize(string $input): array
+{
     $tokens = [];
     $current = '';
     $started = false;
@@ -90,7 +92,8 @@ function coreutilsTokenize(string $input): array {
 }
 
 /** Return canonical input; find retains repeated predicates, other commands use the last alias. */
-function parseCommand(string $input): array {
+function parseCommand(string $input): array
+{
     [$tokens, $error] = coreutilsTokenize($input);
     $command = array_shift($tokens) ?? '';
     $parsed = ['command' => $command, 'options' => [], 'args' => [], 'errors' => []];
@@ -105,8 +108,12 @@ function parseCommand(string $input): array {
     }
     $short = $long = [];
     foreach ($definitions as $name => [$s, $l, $takesValue]) {
-        if ($s !== null) $short[$s] = $name;
-        if ($l !== null) $long[$l] = $name;
+        if ($s !== null) {
+            $short[$s] = $name;
+        }
+        if ($l !== null) {
+            $long[$l] = $name;
+        }
     }
     $endOfOptions = false;
     $findPredicates = false;
@@ -114,13 +121,19 @@ function parseCommand(string $input): array {
         $token = $tokens[$i];
         if ($endOfOptions || $token === '' || $token === '-' || $token[0] !== '-') {
             if ($findPredicates) {
-                $parsed['errors'][] = coreutilsError($command, 'unexpected-path',
-                    'paths must precede -type and -name predicates', $token);
+                $parsed['errors'][] = coreutilsError(
+                    $command,
+                    'unexpected-path',
+                    'paths must precede -type and -name predicates',
+                    $token
+                );
                 continue;
             }
             $parsed['args'][] = $token;
             // basename's second operand is a literal suffix, even if it starts with '-'.
-            if ($command === 'basename') $endOfOptions = true;
+            if ($command === 'basename') {
+                $endOfOptions = true;
+            }
             continue;
         }
         if ($token === '--') {
@@ -171,14 +184,17 @@ function parseCommand(string $input): array {
                 unset($parsed['options'][$name]);
                 $parsed['options'][$name] = $value;
             }
-            if ($takesValue) break;
+            if ($takesValue) {
+                break;
+            }
         }
     }
     return $parsed;
 }
 
 /** Validate parsed or programmatically supplied input before any filesystem changes. */
-function coreutilsValidateInput(string $command, array $input): array {
+function coreutilsValidateInput(string $command, array $input): array
+{
     $errors = $input['errors'] ?? [];
     if (($input['command'] ?? $command) !== $command && !$errors) {
         $errors[] = coreutilsError($command, 'invalid-command', 'input belongs to a different command');

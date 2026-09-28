@@ -1,4 +1,5 @@
 <?php
+
 # PHP Coreutils
 # A lightweight, pure-PHP implementation of classic Unix core utilities,
 # designed for portability and environments without shell access.
@@ -30,12 +31,17 @@ require_once __DIR__ . '/lib/parser.php';
 require_once __DIR__ . '/lib/filesystem.php';
 
 /** Copy local files or recursively copy directories; never prints output. */
-function cp(array $input, ?string $cwd = null): array {
+function cp(array $input, ?string $cwd = null): array
+{
     $result = coreutilsResult('cp', ['copied' => [], 'created' => [], 'skipped' => []]);
     [$options, $args, $errors] = coreutilsValidateInput('cp', $input);
     $result['options'] = $options;
-    foreach ($errors as $error) coreutilsAddError($result, $error, 2);
-    if ($errors) return $result;
+    foreach ($errors as $error) {
+        coreutilsAddError($result, $error, 2);
+    }
+    if ($errors) {
+        return $result;
+    }
     if ($options['help'] ?? false) {
         $result['help'] = coreutilsHelp('cp');
         return $result;
@@ -80,7 +86,8 @@ function cp(array $input, ?string $cwd = null): array {
 }
 
 /** Separator-aware comparison of canonical paths, including Windows case folding. */
-function coreutilsCopyWithin(string $path, string $directory): bool {
+function coreutilsCopyWithin(string $path, string $directory): bool
+{
     if (DIRECTORY_SEPARATOR === '\\') {
         $path = strtolower(str_replace('\\', '/', $path));
         $directory = strtolower(str_replace('\\', '/', $directory));
@@ -89,7 +96,8 @@ function coreutilsCopyWithin(string $path, string $directory): bool {
     return $path === $directory || strpos($path, $directory . '/') === 0;
 }
 
-function coreutilsCopyEntry(string $source, string $target, array &$result, array &$written): void {
+function coreutilsCopyEntry(string $source, string $target, array &$result, array &$written): void
+{
     $recursive = $result['options']['recursive'] ?? false;
     $stat = coreutilsLstat($source, $warning);
     if ($stat === false) {
@@ -99,7 +107,7 @@ function coreutilsCopyEntry(string $source, string $target, array &$result, arra
     $type = $stat['mode'] & 0170000;
     // Ordinary cp follows a source link; recursive cp reproduces the link itself.
     if ($type === 0120000 && !$recursive) {
-        $stat = coreutilsFsCall(fn() => stat($source), $warning);
+        $stat = coreutilsFsCall(fn () => stat($source), $warning);
         if ($stat === false) {
             coreutilsAddError($result, coreutilsFsError('cp', 'stat link target', $source, $warning));
             return;
@@ -114,16 +122,18 @@ function coreutilsCopyEntry(string $source, string $target, array &$result, arra
         coreutilsAddError($result, coreutilsError('cp', 'recursive-required', "omitting directory '$source'; use -r", $source));
         return;
     }
-    $parent = coreutilsFsCall(fn() => realpath(dirname($target)));
+    $parent = coreutilsFsCall(fn () => realpath(dirname($target)));
     if ($parent === false || !coreutilsIsDirectory($parent)) {
         coreutilsAddError($result, coreutilsError('cp', 'invalid-parent', "destination parent does not exist: '$target'", $target));
         return;
     }
     $key = $parent . DIRECTORY_SEPARATOR . basename($target);
-    if (DIRECTORY_SEPARATOR === '\\') $key = strtolower($key);
+    if (DIRECTORY_SEPARATOR === '\\') {
+        $key = strtolower($key);
+    }
     $targetStat = coreutilsLstat($target);
     $targetType = $targetStat === false ? null : $targetStat['mode'] & 0170000;
-    $canonical = coreutilsFsCall(fn() => realpath($source));
+    $canonical = coreutilsFsCall(fn () => realpath($source));
     $sameInode = $targetStat !== false && $stat['ino'] !== 0
         && $stat['ino'] === $targetStat['ino'] && $stat['dev'] === $targetStat['dev'];
     if ($sameInode || ($canonical !== false && coreutilsCopyWithin($key, $canonical)
@@ -148,13 +158,13 @@ function coreutilsCopyEntry(string $source, string $target, array &$result, arra
         return;
     }
     if ($type === 0040000) {
-        $entries = coreutilsFsCall(fn() => scandir($source), $warning);
+        $entries = coreutilsFsCall(fn () => scandir($source), $warning);
         if ($entries === false) {
             coreutilsAddError($result, coreutilsFsError('cp', 'read directory', $source, $warning));
             return;
         }
         if ($targetStat === false) {
-            if (!coreutilsFsCall(fn() => mkdir($target, 0777), $warning)) {
+            if (!coreutilsFsCall(fn () => mkdir($target, 0777), $warning)) {
                 coreutilsAddError($result, coreutilsFsError('cp', 'create directory', $target, $warning));
                 return;
             }
@@ -168,7 +178,7 @@ function coreutilsCopyEntry(string $source, string $target, array &$result, arra
         return;
     }
     if ($type === 0120000) {
-        $link = coreutilsFsCall(fn() => readlink($source), $warning);
+        $link = coreutilsFsCall(fn () => readlink($source), $warning);
         if ($link === false) {
             coreutilsAddError($result, coreutilsFsError('cp', 'read link', $source, $warning));
             return;
@@ -177,9 +187,9 @@ function coreutilsCopyEntry(string $source, string $target, array &$result, arra
             coreutilsAddError($result, coreutilsError('cp', 'unsupported-link', 'symlink() is unavailable', $source));
             return;
         }
-        $success = coreutilsFsCall(fn() => symlink($link, $target), $warning);
+        $success = coreutilsFsCall(fn () => symlink($link, $target), $warning);
     } else {
-        $success = coreutilsFsCall(fn() => copy($source, $target), $warning);
+        $success = coreutilsFsCall(fn () => copy($source, $target), $warning);
     }
     if (!$success) {
         coreutilsAddError($result, coreutilsFsError('cp', 'copy to ' . $target, $source, $warning));

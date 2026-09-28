@@ -1,4 +1,5 @@
 <?php
+
 # PHP Coreutils
 # A lightweight, pure-PHP implementation of classic Unix core utilities,
 # designed for portability and environments without shell access.
@@ -27,7 +28,8 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 /** Canonical name => [short spelling, long spelling, requires a value]. */
-function coreutilsOptionDefinitions(string $command): array {
+function coreutilsOptionDefinitions(string $command): array
+{
     $common = ['help' => [null, 'help', false]];
     if ($command === 'basename') {
         return [
@@ -99,7 +101,8 @@ function coreutilsOptionDefinitions(string $command): array {
     return [];
 }
 
-function coreutilsHelp(string $command): string {
+function coreutilsHelp(string $command): string
+{
     if ($command === 'basename') {
         return "Usage: basename [OPTION]... NAME [SUFFIX]\n"
             . "   or: basename -a [OPTION]... NAME...\n"

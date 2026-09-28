@@ -1,4 +1,5 @@
 <?php
+
 # PHP Coreutils
 # A lightweight, pure-PHP implementation of classic Unix core utilities,
 # designed for portability and environments without shell access.
@@ -30,7 +31,8 @@ require_once __DIR__ . '/lib/parser.php';
 require_once __DIR__ . '/lib/filesystem.php';
 require_once __DIR__ . '/lib/locale.php';
 
-function coreutilsSymbolicPerms(int $mode): string {
+function coreutilsSymbolicPerms(int $mode): string
+{
     $types = [0140000 => 's', 0120000 => 'l', 0100000 => '-', 0060000 => 'b',
         0040000 => 'd', 0020000 => 'c', 0010000 => 'p'];
     $text = $types[$mode & 0170000] ?? '?';
@@ -44,10 +46,13 @@ function coreutilsSymbolicPerms(int $mode): string {
     return $text;
 }
 
-function coreutilsLsSettings(array $options): array {
+function coreutilsLsSettings(array $options): array
+{
     $size = 'bytes';
     foreach ($options as $name => $enabled) {
-        if ($enabled && ($name === 'human-readable' || $name === 'si')) $size = $name;
+        if ($enabled && ($name === 'human-readable' || $name === 'si')) {
+            $size = $name;
+        }
     }
     return [
         'long' => ($options['long'] ?? false) || ($options['omit-owner'] ?? false) || ($options['omit-group'] ?? false),
@@ -57,11 +62,12 @@ function coreutilsLsSettings(array $options): array {
     ];
 }
 
-function coreutilsLsEntry(string $name, string $path, array $stat, array &$result): array {
+function coreutilsLsEntry(string $name, string $path, array $stat, array &$result): array
+{
     $type = coreutilsSymbolicPerms($stat['mode']);
     $target = null;
     if ($type[0] === 'l') {
-        $target = coreutilsFsCall(fn() => readlink($path), $warning);
+        $target = coreutilsFsCall(fn () => readlink($path), $warning);
         if ($target === false) {
             coreutilsAddError($result, coreutilsFsError('ls', 'read symbolic link', $name, $warning));
             $target = null;
@@ -78,13 +84,18 @@ function coreutilsLsEntry(string $name, string $path, array $stat, array &$resul
 }
 
 /** Return metadata with raw names and sizes. Presentation is handled by coreutilsText/Html. */
-function ls(array $input, ?string $cwd = null, ?string $locale = null): array {
+function ls(array $input, ?string $cwd = null, ?string $locale = null): array
+{
     $result = coreutilsResult('ls', ['files' => [], 'directories' => []]);
     $result['locale'] = $locale;
     [$options, $args, $errors] = coreutilsValidateInput('ls', $input);
     $result['options'] = $options;
-    foreach ($errors as $error) coreutilsAddError($result, $error, 2);
-    if ($result['status'] !== 0) return $result;
+    foreach ($errors as $error) {
+        coreutilsAddError($result, $error, 2);
+    }
+    if ($result['status'] !== 0) {
+        return $result;
+    }
     if ($options['help'] ?? false) {
         $result['help'] = coreutilsHelp('ls');
         return $result;
@@ -96,7 +107,7 @@ function ls(array $input, ?string $cwd = null, ?string $locale = null): array {
     }
     $settings = coreutilsLsSettings($options);
     $collator = coreutilsCollator($locale);
-    $compare = fn($a, $b) => coreutilsCompare($a['name'], $b['name'], $collator);
+    $compare = fn ($a, $b) => coreutilsCompare($a['name'], $b['name'], $collator);
     $directories = [];
     foreach ($args ?: ['.'] as $arg) {
         $path = coreutilsResolvePath($arg, $base);
@@ -123,7 +134,7 @@ function ls(array $input, ?string $cwd = null, ?string $locale = null): array {
     usort($directories, $compare);
     foreach ($directories as $directory) {
         $group = $directory + ['entries' => [], 'blocks' => 0, 'readable' => true];
-        $items = coreutilsFsCall(fn() => scandir($directory['path'], SCANDIR_SORT_NONE), $warning);
+        $items = coreutilsFsCall(fn () => scandir($directory['path'], SCANDIR_SORT_NONE), $warning);
         if ($items === false) {
             coreutilsAddError($result, coreutilsFsError('ls', 'open directory', $directory['name'], $warning));
             $group['blocks'] = null;
@@ -131,14 +142,17 @@ function ls(array $input, ?string $cwd = null, ?string $locale = null): array {
             $result['data']['directories'][] = $group;
             continue;
         }
-        $items = array_values(array_filter($items, fn($name) => ($options['all'] ?? false) || $name[0] !== '.'));
-        usort($items, fn($a, $b) => coreutilsCompare($a, $b, $collator));
+        $items = array_values(array_filter($items, fn ($name) => ($options['all'] ?? false) || $name[0] !== '.'));
+        usort($items, fn ($a, $b) => coreutilsCompare($a, $b, $collator));
         if ($options['group-directories-first'] ?? false) {
             $dirs = $files = [];
             foreach ($items as $name) {
                 $full = $directory['path'] . DIRECTORY_SEPARATOR . $name;
-                if (coreutilsIsDirectory($full)) $dirs[] = $name;
-                else $files[] = $name;
+                if (coreutilsIsDirectory($full)) {
+                    $dirs[] = $name;
+                } else {
+                    $files[] = $name;
+                }
             }
             $items = array_merge($dirs, $files);
         }
