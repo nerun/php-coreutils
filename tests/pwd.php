@@ -1,6 +1,6 @@
 <?php
 
-$tests['pwd physical default and explicit cwd have no output or process changes'] = fn() => fixture(function ($base) {
+$tests['pwd physical default and explicit cwd have no output or process changes'] = fn () => fixture(function ($base) {
     $cwd = getcwd();
     $environment = getenv('PWD');
     ob_start();
@@ -16,7 +16,7 @@ $tests['pwd physical default and explicit cwd have no output or process changes'
     same(realpath($base), pwd(parseCommand('pwd --'), $base)['data']['path']);
 });
 
-$tests['pwd preserves logical directory links and resolves physical ones'] = fn() => fixture(function ($base) {
+$tests['pwd preserves logical directory links and resolves physical ones'] = fn () => fixture(function ($base) {
     symlinkSupport($base);
     mkdir($base . '/real');
     mkdir($base . '/real/child');
@@ -36,7 +36,7 @@ $tests['pwd preserves logical directory links and resolves physical ones'] = fn(
     same(realpath($logical), pwd(['options' => ['logical' => false]], $logical)['data']['path']);
 });
 
-$tests['pwd logical uses PWD only when it identifies the current process directory'] = fn() => fixture(function ($base) {
+$tests['pwd logical uses PWD only when it identifies the current process directory'] = fn () => fixture(function ($base) {
     symlinkSupport($base);
     mkdir($base . '/real');
     symlink('real', $base . '/alias');
@@ -63,7 +63,7 @@ $tests['pwd logical uses PWD only when it identifies the current process directo
     }
 });
 
-$tests['pwd relative and dot paths retain filesystem symlink semantics'] = fn() => fixture(function ($base) {
+$tests['pwd relative and dot paths retain filesystem symlink semantics'] = fn () => fixture(function ($base) {
     symlinkSupport($base);
     mkdir($base . '/real');
     mkdir($base . '/real/child');
@@ -88,7 +88,7 @@ $tests['pwd rejects operands and malformed options before inspecting cwd'] = fun
     }
 };
 
-$tests['pwd invalid cwd and broken links produce controlled reusable errors'] = fn() => fixture(function ($base) {
+$tests['pwd invalid cwd and broken links produce controlled reusable errors'] = fn () => fixture(function ($base) {
     file_put_contents($base . '/file', 'x');
     foreach (['', $base . '/missing', $base . '/file', "bad\0path", 'file://' . $base] as $directory) {
         foreach (['pwd -L', 'pwd -P'] as $command) {
@@ -105,7 +105,7 @@ $tests['pwd invalid cwd and broken links produce controlled reusable errors'] = 
     same(1, pwd(parseCommand('pwd -L'), $base . '/broken')['status']);
 });
 
-$tests['pwd repeated calls observe changed link targets'] = fn() => fixture(function ($base) {
+$tests['pwd repeated calls observe changed link targets'] = fn () => fixture(function ($base) {
     symlinkSupport($base);
     mkdir($base . '/one');
     mkdir($base . '/two');
@@ -116,7 +116,7 @@ $tests['pwd repeated calls observe changed link targets'] = fn() => fixture(func
     same(realpath($base . '/two'), pwd(parseCommand('pwd -P'), $base . '/alias')['data']['path']);
 });
 
-$tests['pwd text preserves spaces and HTML escapes the raw path'] = fn() => fixture(function ($base) {
+$tests['pwd text preserves spaces and HTML escapes the raw path'] = fn () => fixture(function ($base) {
     skipUnless(DIRECTORY_SEPARATOR !== '\\', 'Windows forbids angle brackets in filenames');
     $path = $base . '/<project & "docs">';
     mkdir($path);

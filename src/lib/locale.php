@@ -1,4 +1,5 @@
 <?php
+
 # PHP Coreutils
 # A lightweight, pure-PHP implementation of classic Unix core utilities,
 # designed for portability and environments without shell access.
@@ -27,7 +28,8 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 /** Locale helpers have no process-wide side effects. intl is optional. */
-function coreutilsCollator(?string $locale) {
+function coreutilsCollator(?string $locale)
+{
     if ($locale === null || $locale === 'C' || $locale === 'POSIX' || !class_exists('Collator')) {
         return null;
     }
@@ -38,13 +40,17 @@ function coreutilsCollator(?string $locale) {
     }
 }
 
-function coreutilsCompare(string $left, string $right, $collator = null): int {
+function coreutilsCompare(string $left, string $right, $collator = null): int
+{
     $comparison = $collator === null ? false : $collator->compare($left, $right);
     return $comparison === false ? strcmp($left, $right) : $comparison;
 }
 
-function coreutilsDateFormatter(?string $locale) {
-    if (!class_exists('IntlDateFormatter')) return null;
+function coreutilsDateFormatter(?string $locale)
+{
+    if (!class_exists('IntlDateFormatter')) {
+        return null;
+    }
     try {
         return new IntlDateFormatter(
             $locale === null || $locale === 'C' || $locale === 'POSIX' ? 'en_US_POSIX' : $locale,
@@ -59,7 +65,8 @@ function coreutilsDateFormatter(?string $locale) {
     }
 }
 
-function coreutilsFormatDate(int $timestamp, $formatter = null): string {
+function coreutilsFormatDate(int $timestamp, $formatter = null): string
+{
     if ($formatter !== null) {
         $formatted = $formatter->format($timestamp);
         if ($formatted !== false) {

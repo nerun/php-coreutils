@@ -1,4 +1,5 @@
 <?php
+
 # PHP Coreutils
 # A lightweight, pure-PHP implementation of classic Unix core utilities,
 # designed for portability and environments without shell access.
@@ -28,15 +29,18 @@
 
 require_once __DIR__ . '/errorHandling.php';
 
-function coreutilsWorkingDirectory(?string $cwd, ?string &$warning = null) {
-    if ($cwd === null) $cwd = getcwd();
+function coreutilsWorkingDirectory(?string $cwd, ?string &$warning = null)
+{
+    if ($cwd === null) {
+        $cwd = getcwd();
+    }
     if ($cwd === false || $cwd === '' || strpos($cwd, "\0") !== false
         || preg_match('~^[a-zA-Z][a-zA-Z0-9+.-]*://~', $cwd)) {
         $warning = 'Invalid working directory';
         return false;
     }
-    $resolved = coreutilsFsCall(fn() => realpath($cwd), $warning);
-    if ($resolved === false || !coreutilsFsCall(fn() => is_dir($resolved), $warning)) {
+    $resolved = coreutilsFsCall(fn () => realpath($cwd), $warning);
+    if ($resolved === false || !coreutilsFsCall(fn () => is_dir($resolved), $warning)) {
         $warning = $warning ?? 'Working directory does not exist or is inaccessible';
         return false;
     }
@@ -44,9 +48,12 @@ function coreutilsWorkingDirectory(?string $cwd, ?string &$warning = null) {
 }
 
 /** Preserve the final component and .. semantics: realpath() would dereference links. */
-function coreutilsResolvePath(string $path, string $cwd): string {
+function coreutilsResolvePath(string $path, string $cwd): string
+{
     if (DIRECTORY_SEPARATOR === '\\') {
-        if (preg_match('~^[a-zA-Z]:[/\\\\]|^[/\\\\]{2}~', $path)) return $path;
+        if (preg_match('~^[a-zA-Z]:[/\\\\]|^[/\\\\]{2}~', $path)) {
+            return $path;
+        }
         if ($path[0] === '/' || $path[0] === '\\') {
             // A root-relative Windows path belongs to the drive/share of the explicit cwd.
             preg_match('~^(?:[a-zA-Z]:|[/\\\\]{2}[^/\\\\]+[/\\\\][^/\\\\]+)~', $cwd, $root);
@@ -58,12 +65,14 @@ function coreutilsResolvePath(string $path, string $cwd): string {
     return rtrim($cwd, DIRECTORY_SEPARATOR === '\\' ? '/\\' : '/') . DIRECTORY_SEPARATOR . $path;
 }
 
-function coreutilsLstat(string $path, ?string &$warning = null) {
+function coreutilsLstat(string $path, ?string &$warning = null)
+{
     clearstatcache(true, $path);
-    return coreutilsFsCall(fn() => lstat($path), $warning);
+    return coreutilsFsCall(fn () => lstat($path), $warning);
 }
 
-function coreutilsIsDirectory(string $path): bool {
+function coreutilsIsDirectory(string $path): bool
+{
     clearstatcache(true, $path);
-    return coreutilsFsCall(fn() => is_dir($path));
+    return coreutilsFsCall(fn () => is_dir($path));
 }
