@@ -16,14 +16,20 @@ function find(array $input, ?string $cwd = null): array {
         $result['help'] = coreutilsHelp('find');
         return $result;
     }
-    $types = isset($options['type']) ? explode(',', $options['type']) : [];
-    foreach ($types as $type) {
-        if (!in_array($type, ['f', 'd', 'l'], true)) {
-            coreutilsAddError($result, coreutilsError('find', 'invalid-type',
-                'type must be f, d, l or a comma-separated list of these types'), 2);
-            return $result;
+    // Each list is OR; repeated predicates are AND (intersection of their lists).
+    $types = null;
+    foreach ((array) ($options['type'] ?? []) as $list) {
+        $accepted = explode(',', $list);
+        foreach ($accepted as $type) {
+            if (!in_array($type, ['f', 'd', 'l'], true)) {
+                coreutilsAddError($result, coreutilsError('find', 'invalid-type',
+                    'type must be f, d, l or a comma-separated list of these types'), 2);
+                return $result;
+            }
         }
+        $types = $types === null ? $accepted : array_intersect($types, $accepted);
     }
+    $patterns = (array) ($options['name'] ?? []);
     $base = coreutilsWorkingDirectory($cwd, $warning);
     if ($base === false) {
         coreutilsAddError($result, coreutilsError('find', 'invalid-cwd', $warning));
@@ -52,7 +58,18 @@ function find(array $input, ?string $cwd = null): array {
                     "cannot inspect '$name': trailing separator requires a real directory", $name));
                 continue;
             }
-            if (!$types || in_array($type, $types, true)) {
+            $matches = $types === null || in_array($type, $types, true);
+            // Match the displayed entry's basename, including a starting . or .. .
+            $leaf = rtrim($name, $separators);
+            if (DIRECTORY_SEPARATOR === '\\') $leaf = str_replace('\\', '/', $leaf);
+            $slash = strrpos($leaf, '/');
+            if ($slash !== false) $leaf = substr($leaf, $slash + 1);
+            if ($leaf === '') $leaf = DIRECTORY_SEPARATOR;
+            foreach ($patterns as $pattern) {
+                if (!$matches) break;
+                $matches = fnmatch($pattern, $leaf);
+            }
+            if ($matches) {
                 $result['data']['entries'][] = ['name' => $name, 'path' => $path, 'type' => $type];
             }
             if ($type !== 'd') continue;

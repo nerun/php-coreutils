@@ -89,7 +89,7 @@ function coreutilsTokenize(string $input): array {
     return [$tokens, null];
 }
 
-/** Return command, canonical options, operands and syntax errors. Last alias wins. */
+/** Return canonical input; find retains repeated predicates, other commands use the last alias. */
 function parseCommand(string $input): array {
     [$tokens, $error] = coreutilsTokenize($input);
     $command = array_shift($tokens) ?? '';
@@ -109,9 +109,15 @@ function parseCommand(string $input): array {
         if ($l !== null) $long[$l] = $name;
     }
     $endOfOptions = false;
+    $findPredicates = false;
     for ($i = 0, $count = count($tokens); $i < $count; $i++) {
         $token = $tokens[$i];
         if ($endOfOptions || $token === '' || $token === '-' || $token[0] !== '-') {
+            if ($findPredicates) {
+                $parsed['errors'][] = coreutilsError($command, 'unexpected-path',
+                    'paths must precede -type and -name predicates', $token);
+                continue;
+            }
             $parsed['args'][] = $token;
             continue;
         }
@@ -149,9 +155,20 @@ function parseCommand(string $input): array {
                     $value = $tokens[++$i];
                 }
             }
-            // Reinsert so mutually exclusive display options retain their last occurrence order.
-            unset($parsed['options'][$name]);
-            $parsed['options'][$name] = $value;
+            if ($command === 'find' && in_array($name, ['type', 'name'], true)) {
+                $findPredicates = true;
+                if (array_key_exists($name, $parsed['options'])) {
+                    $previous = (array) $parsed['options'][$name];
+                    $previous[] = $value;
+                    $parsed['options'][$name] = $previous;
+                } else {
+                    $parsed['options'][$name] = $value;
+                }
+            } else {
+                // Reinsert so mutually exclusive display options retain their last occurrence order.
+                unset($parsed['options'][$name]);
+                $parsed['options'][$name] = $value;
+            }
             if ($takesValue) break;
         }
     }
@@ -180,6 +197,17 @@ function coreutilsValidateInput(string $command, array $input): array {
     foreach ($options as $name => $value) {
         if (!isset($definitions[$name])) {
             $errors[] = coreutilsError($command, 'invalid-option', "invalid option '$name'");
+        } elseif ($command === 'find' && in_array($name, ['type', 'name'], true)) {
+            $values = is_array($value) ? $value : [$value];
+            if (!$values) {
+                $errors[] = coreutilsError($command, 'invalid-value', "option '$name' requires at least one value");
+            }
+            foreach ($values as $item) {
+                if (!is_string($item) || strpos($item, "\0") !== false) {
+                    $errors[] = coreutilsError($command, 'invalid-value', "invalid value for option '$name'");
+                    break;
+                }
+            }
         } elseif ($definitions[$name][2] ? !is_string($value) : !is_bool($value)) {
             $errors[] = coreutilsError($command, 'invalid-value', "invalid value for option '$name'");
         }

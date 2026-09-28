@@ -1,18 +1,18 @@
 <?php
 
 $tests['find parses single-dash predicates and long aliases'] = function () {
-    foreach (['find . -type f,l', 'find --type=f,l .', 'find --type f,l .'] as $command) {
+    foreach (['find . -type f,l', 'find . --type=f,l', 'find . --type f,l'] as $command) {
         $parsed = parseCommand($command);
         same([], $parsed['errors']);
         same(['.'], $parsed['args']);
         same(['type' => 'f,l'], $parsed['options']);
     }
-    same('l', parseCommand('find -type f --type=d -type l')['options']['type']);
+    same(['f', 'd', 'l'], parseCommand('find -type f --type=d -type l')['options']['type']);
 };
 $tests['find rejects invalid predicates and types before traversal'] = function () {
     foreach (['find -type', 'find -type -- .', 'find -type ""', 'find -type x',
         'find -type f,', 'find -type ,f', 'find -type f,,l', 'find -type "f, l"',
-        'find -type F', 'find -typef', 'find -name x', 'find -L'] as $command) {
+        'find -type F', 'find -typef', 'find -name', 'find -name --', 'find -L'] as $command) {
         $result = find(parseCommand($command), '/does-not-exist');
         same(2, $result['status']);
         same([], $result['data']['entries']);
@@ -96,4 +96,112 @@ $tests['find help needs no filesystem access'] = function () {
     $result = find(parseCommand('find --help'), '/does-not-exist');
     same(0, $result['status']);
     check(strpos(coreutilsText($result), 'Usage: find') === 0);
+    check(strpos($result['help'], '-name') !== false);
+    check(strpos($result['help'], 'combined with AND') !== false);
+    check(strpos($result['help'], 'last type option wins') === false);
 };
+
+$tests['find requires all starting paths before predicates'] = function () {
+    foreach (['find -type d TESTE-c', 'find first -name "*" second',
+        'find -type f -- -folder', 'find -name x . -type f',
+        'find --type=f,l .', 'find --name=x .'] as $command) {
+        $result = find(parseCommand($command), '/does-not-exist');
+        same(2, $result['status']);
+        same('unexpected-path', $result['errors'][0]['code']);
+        same([], $result['data']['entries']);
+    }
+    foreach (['find a b -type d', 'find -type d', 'find -name "*" -type f',
+        'find ./-folder -type f', 'find -- -folder', 'find . -type f --'] as $command) {
+        same([], parseCommand($command)['errors']);
+    }
+    // Other commands still allow operands and options to be interspersed.
+    same(['first', 'second'], parseCommand('ls first -l second')['args']);
+    same(['logical' => true, 'physical' => true], parseCommand('pwd -LP')['options']);
+};
+
+$tests['find intersects repeated types instead of overwriting or joining them'] = fn() => fixture(function ($base) {
+    mkdir($base . '/dir');
+    file_put_contents($base . '/file', 'x');
+    foreach (['find . -type f,d -type f', 'find . --type=f,d --type=f'] as $command) {
+        $result = find(parseCommand($command), $base);
+        same(0, $result['status']);
+        same(['f'], array_column($result['data']['entries'], 'type'));
+    }
+    foreach (['find . -type f -type d', 'find . -type d -type f -type f'] as $command) {
+        $result = find(parseCommand($command), $base);
+        same(0, $result['status']);
+        same([], $result['data']['entries']);
+    }
+    same(2, find(parseCommand('find . -type x -type f'), $base)['status']);
+    same(2, find(parseCommand('find . -type f -type ""'), $base)['status']);
+    symlinkSupport($base);
+    symlink('file', $base . '/alias');
+    same(['l'], array_column(find(parseCommand('find . -type f,l -type l'), $base)['data']['entries'], 'type'));
+    same(['l', 'f'], array_column(find(parseCommand('find . -type f,l'), $base)['data']['entries'], 'type'));
+});
+
+$tests['find name matches basenames and traverses nonmatching directories'] = fn() => fixture(function ($base) {
+    mkdir($base . '/unmatched');
+    mkdir($base . '/folder.php');
+    foreach (['.hidden.php', 'test1.php', 'test2.php', 'test3.txt', 'UPPER.PHP'] as $file) {
+        file_put_contents($base . '/unmatched/' . $file, 'x');
+    }
+    $expected = ['.hidden.php', 'test1.php', 'test2.php'];
+    foreach (['find . -type f -name "*.php"', 'find . -name "*.php" -type f',
+        'find . --name="*.php" --type=f'] as $command) {
+        $result = find(parseCommand($command), $base);
+        same(0, $result['status']);
+        same($expected, array_map(fn($entry) => basename($entry['name']), $result['data']['entries']));
+    }
+    same(4, count(find(parseCommand('find . -name "*.php"'), $base)['data']['entries']));
+    same([], find(parseCommand('find . -name "unmatched/*.php"'), $base)['data']['entries']);
+    same([], find(parseCommand('find . -name ""'), $base)['data']['entries']);
+    same(['.'], array_column(find(parseCommand('find . -name .'), $base)['data']['entries'], 'name'));
+    same(['unmatched/'], array_column(find(parseCommand('find unmatched/ -name unmatched'), $base)['data']['entries'], 'name'));
+});
+
+$tests['find name supports wildcards sets escapes and repeated predicates'] = fn() => fixture(function ($base) {
+    foreach (['test1.php', 'test2.php', 'testa.php', 'other.php', 'two words', '[tag]'] as $file) {
+        file_put_contents($base . '/' . $file, 'x');
+    }
+    $matches = function ($command) use ($base) {
+        $result = find(parseCommand($command), $base);
+        same(0, $result['status']);
+        return array_map(fn($entry) => basename($entry['name']), $result['data']['entries']);
+    };
+    same(['test1.php', 'test2.php', 'testa.php'], $matches('find . -name "test?.php"'));
+    same(['test1.php', 'test2.php'], $matches('find . -name "test[1-2].php"'));
+    same(['testa.php'], $matches('find . -name "test[!0-9].php"'));
+    same(['two words'], $matches('find . -name "two words"'));
+    same(['[tag]'], $matches("find . -name '\\[tag\\]'"));
+    same(['test1.php', 'test2.php', 'testa.php'], $matches('find . -name "*.php" --name="test*"'));
+    same([], $matches('find . -name "*.php" -name "*.txt"'));
+    same(['*.php', 'test*'], parseCommand('find . -name "*.php" -name "test*"')['options']['name']);
+});
+
+$tests['find name tests link names including broken links without following them'] = fn() => fixture(function ($base) {
+    symlinkSupport($base);
+    mkdir($base . '/real');
+    file_put_contents($base . '/real/target.php', 'x');
+    symlink('real', $base . '/alias.php');
+    symlink('missing', $base . '/broken.php');
+    symlink('real/target.php', $base . '/other.txt');
+    $result = find(parseCommand('find . -type l -name "*.php"'), $base);
+    same(0, $result['status']);
+    same(['alias.php', 'broken.php'], array_map(fn($entry) => basename($entry['name']), $result['data']['entries']));
+    same(3, count(find(parseCommand('find . -name "*.php"'), $base)['data']['entries']));
+});
+
+$tests['find canonical predicates accept strings and nonempty arrays only'] = fn() => fixture(function ($base) {
+    file_put_contents($base . '/test.php', 'x');
+    $input = ['options' => ['type' => ['f,d', 'f'], 'name' => ['*.php', 'test*']]];
+    same(find(parseCommand('find -type f,d -name "*.php" -type f -name "test*"'), $base)['data'],
+        find($input, $base)['data']);
+    foreach (['type', 'name'] as $option) {
+        foreach ([[], [null], [['f']], ['f', true], false, null, 1, "x\0y", ["x\0y"]] as $value) {
+            $result = find(['options' => [$option => $value]], '/does-not-exist');
+            same(2, $result['status']);
+            same([], $result['data']['entries']);
+        }
+    }
+});

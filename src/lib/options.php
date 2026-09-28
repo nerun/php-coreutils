@@ -36,7 +36,10 @@ function coreutilsOptionDefinitions(string $command): array {
         ] + $common;
     }
     if ($command === 'find') {
-        return ['type' => ['type', 'type', true]] + $common;
+        return [
+            'type' => ['type', 'type', true],
+            'name' => ['name', 'name', true],
+        ] + $common;
     }
     if ($command === 'ls') {
         return [
@@ -91,21 +94,25 @@ function coreutilsHelp(string $command): string {
         return "Usage: pwd [OPTION]...\n"
             . "Print the working directory; no operands are accepted.\n\n"
             . "  -L, --logical     preserve a valid absolute logical cwd or PWD\n"
-            . "                     otherwise fall back to the physical path\n"
+            . "                    otherwise fall back to the physical path\n"
             . "  -P, --physical    resolve symbolic links (default)\n"
             . "      --help        show this help\n"
             . "      --            end options\n"
             . "The last -L or -P wins. An explicit cwd takes precedence over PWD.\n";
     }
     if ($command === 'find') {
-        return "Usage: find [PATH]... [-type TYPES]\n"
+        return "Usage: find [PATH]... [-type TYPES] [-name PATTERN]\n"
             . "Recursively list entries, including starting paths and hidden names.\n"
             . "The default path is .; symbolic links are not traversed.\n\n"
-            . "  -type, --type TYPES  f: regular files, d: directories, l: symbolic links\n"
-            . "                       comma-separated types match any listed type (f,l)\n"
-            . "                       the last type option wins\n"
-            . "      --help           show this help\n"
-            . "      --               end options\n";
+            . "  -type, --type TYPES    f: files, d: directories, l: symbolic links\n"
+            . "                         comma-separated types match any listed type (f,l)\n"
+            . "  -name, --name PATTERN  match the basename (case-sensitive): *, ?, [abc]\n"
+            . "                         quote patterns, e.g. -name '*.php'\n"
+            . "      --help             show this help\n"
+            . "      --                 end options\n\n"
+            . "Paths must precede predicates; -type and -name may appear in either order.\n"
+            . "All predicates, including repeated ones, are combined with AND.\n"
+            . "Omitted predicates do not restrict the search.\n";
     }
     if ($command === 'ls') {
         return "Usage: ls [OPTION]... [FILE]...\n"
@@ -141,8 +148,8 @@ function coreutilsHelp(string $command): string {
     if ($command === 'cp') {
         return "Usage: cp [OPTION]... SOURCE... DESTINATION\n"
             . "Copy files; multiple sources require an existing destination directory.\n\n"
-            . "  -r, --recursive     copy directories and preserve source symbolic links\n"
-            . "  -n, --no-clobber    skip existing destination files\n"
+            . "  -r, --recursive    copy directories and preserve source symbolic links\n"
+            . "  -n, --no-clobber   skip existing destination files\n"
             . "  -v, --verbose      report copied entries and created directories\n"
             . "      --help         show this help\n"
             . "      --             end options\n";
@@ -150,8 +157,8 @@ function coreutilsHelp(string $command): string {
     if ($command === 'mv') {
         return "Usage: mv [OPTION]... SOURCE... DESTINATION\n"
             . "Rename or move files, directories and symbolic links on the same filesystem.\n\n"
-            . "  -f, --force          replace existing files (default)\n"
-            . "  -n, --no-clobber     skip existing destinations\n"
+            . "  -f, --force         replace existing files (default)\n"
+            . "  -n, --no-clobber    skip existing destinations\n"
             . "  -v, --verbose       report completed moves\n"
             . "      --help          show this help\n"
             . "      --              end options\n"
