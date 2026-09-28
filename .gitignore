@@ -23,3 +23,6 @@ Thumbs.db
 # PHP CS Fixer
 # https://cs.symfony.com/doc/config.html
 php-cs-fixer-v3.phar
+
+# php-coreutils
+index.php
