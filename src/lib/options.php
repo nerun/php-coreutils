@@ -29,6 +29,16 @@
 /** Canonical name => [short spelling, long spelling, requires a value]. */
 function coreutilsOptionDefinitions(string $command): array {
     $common = ['help' => [null, 'help', false]];
+    if ($command === 'basename') {
+        return [
+            'multiple' => ['a', 'multiple', false],
+            'suffix' => ['s', 'suffix', true],
+            'zero' => ['z', 'zero', false],
+        ] + $common;
+    }
+    if ($command === 'dirname') {
+        return ['zero' => ['z', 'zero', false]] + $common;
+    }
     if ($command === 'pwd') {
         return [
             'logical' => ['L', 'logical', false],
@@ -90,6 +100,27 @@ function coreutilsOptionDefinitions(string $command): array {
 }
 
 function coreutilsHelp(string $command): string {
+    if ($command === 'basename') {
+        return "Usage: basename [OPTION]... NAME [SUFFIX]\n"
+            . "   or: basename -a [OPTION]... NAME...\n"
+            . "Strip directories and an optional suffix from Unix path text.\n\n"
+            . "  -a, --multiple       treat all operands as names\n"
+            . "  -s, --suffix SUFFIX  remove SUFFIX; implies -a (last suffix wins)\n"
+            . "  -z, --zero           end each result with NUL instead of newline\n"
+            . "      --help           show this help\n"
+            . "      --               end options\n\n"
+            . "Options must precede operands. Paths need not exist; cwd is ignored.\n"
+            . "Only / is a separator on every platform; // is treated as /.\n";
+    }
+    if ($command === 'dirname') {
+        return "Usage: dirname [OPTION]... NAME...\n"
+            . "Strip the final component from each Unix path; use . when absent.\n\n"
+            . "  -z, --zero    end each result with NUL instead of newline\n"
+            . "      --help    show this help\n"
+            . "      --        end options\n\n"
+            . "Paths need not exist; cwd is ignored.\n"
+            . "Only / is a separator on every platform; // is treated as /.\n";
+    }
     if ($command === 'pwd') {
         return "Usage: pwd [OPTION]...\n"
             . "Print the working directory; no operands are accepted.\n\n"

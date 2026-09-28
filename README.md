@@ -12,7 +12,7 @@ The goal is practical, predictable behavior: do one thing well, keep interfaces
 simple, and let applications compose the returned data. This is a library, not
 a shell emulator or a complete GNU Coreutils replacement.
 
-Currently implemented: **ls**, **mkdir**, **mv**, **cp**, **rm**, **rmdir**, **find** and **pwd**.
+Currently implemented: **ls**, **mkdir**, **mv**, **cp**, **rm**, **rmdir**, **find**, **pwd**, **basename** and **dirname**.
 
 ## Requirements
 
@@ -39,14 +39,16 @@ require_once __DIR__ . '/php-coreutils/src/bootstrap.php';
 ```
 
 Alternatively, include each command file (`src/ls.php`, `src/mkdir.php`, `src/mv.php`,
-`src/cp.php`, `src/rm.php`, `src/rmdir.php`, `src/find.php` or `src/pwd.php`) individually. For text or
+`src/cp.php`, `src/rm.php`, `src/rmdir.php`, `src/find.php`, `src/pwd.php`,
+`src/basename.php` or `src/dirname.php`) individually. For text or
 HTML formatting, also include `src/lib/format.php`.
 
 ## Usage
 
 All commands accept an input array and an optional working directory. Relative
 operands use that directory; absolute operands remain absolute. Omitting the
-working directory uses `getcwd()`.
+working directory uses `getcwd()`. The text-only commands `basename` and
+`dirname` accept the same argument but ignore it, without accessing the filesystem.
 
 ```php
 $result = ls(parseCommand('ls -lah'), __DIR__);
@@ -59,7 +61,8 @@ if ($result['status'] !== 0) {
 ```
 
 `_mkdir()` keeps its original name to avoid a collision with PHP's native
-`mkdir()` function. Similarly, `_rmdir()` avoids the native `rmdir()` name.
+`mkdir()` function. Similarly, `_rmdir()`, `_basename()` and `_dirname()` avoid
+collisions with the corresponding native PHP functions.
 No command prints anything on its own.
 
 For a web interface, use the HTML formatter. It escapes the entire output,
@@ -98,7 +101,7 @@ Every command returns an array with these keys:
 
 | Key | Meaning |
 | --- | --- |
-| `command` | `ls`, `mkdir`, `mv`, `cp`, `rm`, `rmdir`, `find` or `pwd`. |
+| `command` | `ls`, `mkdir`, `mv`, `cp`, `rm`, `rmdir`, `find`, `pwd`, `basename` or `dirname`. |
 | `status` | `0`: success; `1`: filesystem error, possibly with partial success; `2`: invalid input. |
 | `data` | Structured results described below. Names and sizes are never HTML-escaped or preformatted. |
 | `errors` | Errors containing `code`, `message`, and `path` (which can be `null`). |
@@ -127,8 +130,14 @@ Every command returns an array with these keys:
   deletion order (children before their directory). `data.skipped` contains
   `{path, reason: not-found}` entries for missing paths ignored by `rm -f`.
 
+* `find`: `data.entries` contains matching entries with `name` (displayed path),
+  `path` (absolute lookup path), and `type` (file type letter).
+
 * `pwd`: `data.path` contains the absolute working directory, or `null` on
   error or when displaying help.
+
+* `basename` / `dirname`: `data.entries` contains `input` / `output` string
+  pairs in operand order. The output is unquoted and has no record terminator.
 
 Syntax and option errors are checked before filesystem changes. Filesystem
 errors do not roll back earlier changes: remaining operands are still tried.
@@ -167,8 +176,12 @@ Applications needing separate output/error channels should use `data` and
 | rmdir | `-p`, `--parents` | `parents` |
 | rmdir | `-v`, `--verbose` | `verbose` |
 | find | `-type TYPES`, `--type TYPES`, `--type=TYPES` | `type` |
+| find | `-name PATTERN`, `--name PATTERN`, `--name=PATTERN` | `name` |
 | pwd | `-L`, `--logical` | `logical` |
 | pwd | `-P`, `--physical` | `physical` |
+| basename | `-a`, `--multiple` | `multiple` |
+| basename | `-s SUFFIX`, `-sSUFFIX`, `--suffix SUFFIX`, `--suffix=SUFFIX` | `suffix` |
+| basename / dirname | `-z`, `--zero` | `zero` |
 | all | `--help` | `help` |
 
 Boolean canonical options accept `true` or `false`. `mode` accepts a string of
@@ -181,6 +194,59 @@ explicit mode is applied only to a newly created final directory. Missing
 parents use default permissions, with owner write/search access ensured.
 Existing directories are never chmodded. Windows permissions follow PHP and
 Windows semantics; Unix permission bits cannot provide equivalent guarantees.
+
+## Basenames and directory names
+
+```php
+echo coreutilsText(_basename(parseCommand('basename /srv/docs/report.txt')));
+// report.txt
+echo coreutilsText(_basename(parseCommand('basename /srv/docs/report.txt .txt')));
+// report
+echo coreutilsText(_basename(parseCommand('basename -s .txt docs/a.txt docs/b.txt')));
+// a and b, one per line
+echo coreutilsText(_dirname(parseCommand('dirname /srv/docs/report.txt')));
+// /srv/docs
+echo coreutilsText(_dirname(parseCommand('dirname docs/a.txt backups/b.txt')));
+// docs and backups, one per line
+```
+
+Both commands operate only on Unix path text. They never check existence, resolve
+symbolic links, normalize `.` / `..`, or use `$cwd`. Only `/` separates components
+on every platform; backslashes and drive prefixes are ordinary characters, not
+native Windows path syntax. Quote literal backslashes when using `parseCommand()`.
+Repeated leading slashes and all-slash paths use Linux-style root semantics:
+`//` is treated as `/` when the result is a root, not a special network root.
+Internal separators in a retained directory prefix are preserved.
+
+`basename NAME [SUFFIX]` accepts one name and an optional literal suffix.
+`-a` treats every operand as a name; `-s SUFFIX` also enables multiple names.
+The suffix is case-sensitive and removed once, only if it matches the end of
+the basename and would not remove the entire name. The last `-s` / `--suffix`
+wins; an empty suffix removes nothing. Options must precede the first operand:
+`basename file.txt -z` treats `-z` as a suffix, not an option. Use
+`basename -z file.txt` to select NUL termination.
+
+`dirname` accepts one or more names. Trailing slashes are ignored before removing
+the last component. Names without a directory component yield `.`; root yields
+`/`. Empty string operands are valid: `basename ""` returns an empty string and
+`dirname ""` returns `.`. NUL bytes and nonstring operands are invalid input.
+URL-like strings are accepted as text; no stream wrapper is ever opened.
+
+Both commands support `--help` and `--`. Missing operands, invalid options or
+malformed input return status 2 with no entries. They produce no output directly.
+`coreutilsText()` returns each raw result followed by a newline, or NUL with
+`-z`; use the latter for text consumers handling embedded newlines. The HTML
+formatter escapes the output as usual; use newline mode for readable web output.
+
+Canonical input uses the existing array interface:
+
+```php
+$result = _basename([
+    'args' => ['docs/a.txt', 'docs/b.txt'],
+    'options' => ['suffix' => '.txt'],
+]);
+$names = array_column($result['data']['entries'], 'output'); // ['a', 'b']
+```
 
 ## Working directory
 
@@ -223,6 +289,8 @@ $result = find(parseCommand('find . -type f,l'), $cwd);
 echo coreutilsHtml($result);
 
 $result = find(parseCommand('find documents backups -type d'), $cwd);
+$result = find(parseCommand('find documents -type f,l -name "*.php"'), $cwd);
+$result = find(parseCommand('find documents -name "*.php" -type f'), $cwd);
 $result = find(['args' => ['.'], 'options' => ['type' => 'l']], $cwd);
 ```
 
@@ -235,9 +303,46 @@ Multiple starting paths are searched in operand order, without deduplication.
 `-type f` selects regular files, `-type d` real directories, and `-type l`
 symbolic links, including broken links. Comma-separated types are alternatives:
 `-type f,l` selects files or links. Empty or unsupported types are invalid input.
-The last type option wins, following the library's option convention; repeated
-predicates are not combined as GNU find expressions. `--` ends option parsing;
-use `find -type f -- -folder` for a dash-prefixed starting path.
+All predicates are combined with AND, including repeated predicates:
+`-type f,l -type l` selects only links, while `-type f -type d` matches nothing.
+Each comma-separated type list uses OR; separate predicates must all match.
+
+Paths must precede the first `-type` or `-name` predicate. For example,
+`find documents -type f` is valid, but `find -type f documents` is an input
+error. The predicates themselves may appear in either order. With no paths,
+`find -type f` searches `.`. `--` ends option parsing but does not allow paths
+after predicates. Use `find ./-folder -type f` for a filtered search of a
+dash-prefixed path, or `find -- -folder` without filters.
+
+`-name` matches only the entry's basename, not the full path or a link's target.
+Matching is case-sensitive and uses PHP `fnmatch()` with shell patterns:
+`*`, `?`, character sets/ranges (`[abc]`, `[0-9]`), negated sets (`[!a]`), and
+backslash escapes. These are wildcard patterns, not regular expressions.
+Quote patterns containing spaces; use single quotes to preserve literal
+backslashes through command parsing. Leading dots are not special:
+`-name '*.php'` also matches `.hidden.php`. An empty pattern matches no names.
+Character matching follows the host runtime and its locale; the library does
+not change the process locale.
+
+Without `-name`, every name is accepted; without `-type`, every type is accepted.
+Nonmatching directories are still traversed so their descendants can match.
+Repeated name predicates must all match: `-name '*.php' -name 'test*'` selects
+names beginning with `test` and ending with `.php`.
+
+Canonical `type` and `name` options accept a string for one predicate or a
+nonempty array of strings for repeated predicates. `parseCommand()` returns a
+string for a single occurrence and an array for repeated occurrences:
+
+```php
+$result = find([
+    'args' => ['documents'],
+    'options' => ['type' => ['f,l', 'f'], 'name' => ['*.php', 'test*']],
+], $cwd);
+```
+
+This selects regular files whose names match both patterns. Invalid predicates
+produce status 2 before traversal; a valid search with no matches returns
+status 0 and an empty `data.entries` array.
 
 Links encountered during traversal, including starting links, are listed but
 never traversed. A trailing separator on a starting link or file is rejected;
@@ -252,8 +357,9 @@ Text output lists one quoted path per line using the existing name formatter;
 HTML output is escaped. Filesystem failures produce status 1 and diagnostics,
 while other pending entries and starting paths are still processed.
 
-This initial subset does not implement `-name`, `-L`, depth limits, Boolean
-expressions, `-exec`, or `-delete`. Results are collected in memory.
+This subset does not implement `-iname`, `-L`, depth limits, explicit Boolean
+operators (`-a`, `-o`, `!`, parentheses), `-exec`, or `-delete`.
+Results are collected in memory.
 
 ## Moving and renaming
 
@@ -371,12 +477,18 @@ been tested in the WASM test environment.
 `parseCommand()` returns `command`, `options`, `args`, and `errors`. It supports
 single/double quotes, backslash escaping, grouped short options, whitespace
 separators and `--` to end options. Empty quoted arguments are preserved and
-rejected as filesystem paths; unmatched quotes, missing option values and
-unexpected values are errors. It does not expand variables, wildcards or `~`,
+rejected as filesystem paths (but accepted by `basename` and `dirname`);
+unmatched quotes, missing option values and unexpected values are errors.
+It does not expand variables, wildcards or `~`,
 or execute substitutions, pipelines or redirections.
 
-Only local filesystem paths are accepted; stream-wrapper URLs and NUL bytes
-are rejected. Windows absolute drive and UNC paths are supported; drive-relative
+`find` requires paths before its predicates, and `basename` stops option parsing
+at the first operand. Other commands allow options interspersed with operands.
+Repeated options normally use the last value; `find` retains repeated `type`
+and `name` predicates and combines them with AND.
+
+For filesystem commands, only local paths are accepted; stream-wrapper URLs and
+NUL bytes are rejected. Windows absolute drive and UNC paths are supported; drive-relative
 paths such as `C:folder` are rejected. Root-relative Windows paths use the
 explicit working directory's drive/share. Relative paths containing `..` retain
 filesystem symlink semantics.

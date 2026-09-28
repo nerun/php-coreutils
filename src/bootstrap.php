@@ -34,4 +34,6 @@ require_once __DIR__ . '/rm.php';
 require_once __DIR__ . '/rmdir.php';
 require_once __DIR__ . '/find.php';
 require_once __DIR__ . '/pwd.php';
+require_once __DIR__ . '/basename.php';
+require_once __DIR__ . '/dirname.php';
 require_once __DIR__ . '/lib/format.php';

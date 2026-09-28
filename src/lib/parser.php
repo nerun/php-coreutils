@@ -119,6 +119,8 @@ function parseCommand(string $input): array {
                 continue;
             }
             $parsed['args'][] = $token;
+            // basename's second operand is a literal suffix, even if it starts with '-'.
+            if ($command === 'basename') $endOfOptions = true;
             continue;
         }
         if ($token === '--') {
@@ -212,7 +214,14 @@ function coreutilsValidateInput(string $command, array $input): array {
             $errors[] = coreutilsError($command, 'invalid-value', "invalid value for option '$name'");
         }
     }
+    $pathText = in_array($command, ['basename', 'dirname'], true);
     foreach ($args as $arg) {
+        if ($pathText) {
+            if (!is_string($arg) || strpos($arg, "\0") !== false) {
+                $errors[] = coreutilsError($command, 'invalid-path', 'operands must be strings without NUL bytes');
+            }
+            continue;
+        }
         if (!is_string($arg) || $arg === '' || strpos($arg, "\0") !== false) {
             $errors[] = coreutilsError($command, 'invalid-path', 'paths must be nonempty strings without NUL bytes');
         } elseif (preg_match('~^[a-zA-Z][a-zA-Z0-9+.-]*://~', $arg)) {

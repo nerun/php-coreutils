@@ -97,6 +97,12 @@ function coreutilsFormatEntries(array $entries, array $settings, $formatter, arr
 function coreutilsText(array $result): string {
     $lines = array_column($result['errors'], 'message');
     if ($result['help'] !== null) return implode("\n", $lines) . ($lines ? "\n" : '') . $result['help'];
+    if (in_array($result['command'], ['basename', 'dirname'], true)) {
+        $separator = ($result['options']['zero'] ?? false) ? "\0" : "\n";
+        $values = array_column($result['data']['entries'], 'output');
+        return ($lines ? implode("\n", $lines) . "\n" : '')
+            . ($values ? implode($separator, $values) . $separator : '');
+    }
     if ($result['command'] === 'ls') {
         $settings = coreutilsLsSettings($result['options']);
         $formatter = $settings['long'] ? coreutilsDateFormatter($result['locale'] ?? null) : null;
