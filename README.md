@@ -12,7 +12,7 @@ The goal is practical, predictable behavior: do one thing well, keep interfaces
 simple, and let applications compose the returned data. This is a library, not
 a shell emulator or a complete GNU Coreutils replacement.
 
-Currently implemented: **ls**, **mkdir**, **mv**, **cp**, **rm**, **rmdir** and **find**.
+Currently implemented: **ls**, **mkdir**, **mv**, **cp**, **rm**, **rmdir**, **find** and **pwd**.
 
 ## Requirements
 
@@ -39,7 +39,7 @@ require_once __DIR__ . '/php-coreutils/src/bootstrap.php';
 ```
 
 Alternatively, include each command file (`src/ls.php`, `src/mkdir.php`, `src/mv.php`,
-`src/cp.php`, `src/rm.php`, `src/rmdir.php` or `src/find.php`) individually. For text or
+`src/cp.php`, `src/rm.php`, `src/rmdir.php`, `src/find.php` or `src/pwd.php`) individually. For text or
 HTML formatting, also include `src/lib/format.php`.
 
 ## Usage
@@ -98,7 +98,7 @@ Every command returns an array with these keys:
 
 | Key | Meaning |
 | --- | --- |
-| `command` | `ls`, `mkdir`, `mv`, `cp`, `rm`, `rmdir` or `find`. |
+| `command` | `ls`, `mkdir`, `mv`, `cp`, `rm`, `rmdir`, `find` or `pwd`. |
 | `status` | `0`: success; `1`: filesystem error, possibly with partial success; `2`: invalid input. |
 | `data` | Structured results described below. Names and sizes are never HTML-escaped or preformatted. |
 | `errors` | Errors containing `code`, `message`, and `path` (which can be `null`). |
@@ -126,6 +126,9 @@ Every command returns an array with these keys:
 * `rm` / `rmdir`: `data.removed` lists absolute paths actually deleted, in
   deletion order (children before their directory). `data.skipped` contains
   `{path, reason: not-found}` entries for missing paths ignored by `rm -f`.
+
+* `pwd`: `data.path` contains the absolute working directory, or `null` on
+  error or when displaying help.
 
 Syntax and option errors are checked before filesystem changes. Filesystem
 errors do not roll back earlier changes: remaining operands are still tried.
@@ -164,6 +167,8 @@ Applications needing separate output/error channels should use `data` and
 | rmdir | `-p`, `--parents` | `parents` |
 | rmdir | `-v`, `--verbose` | `verbose` |
 | find | `-type TYPES`, `--type TYPES`, `--type=TYPES` | `type` |
+| pwd | `-L`, `--logical` | `logical` |
+| pwd | `-P`, `--physical` | `physical` |
 | all | `--help` | `help` |
 
 Boolean canonical options accept `true` or `false`. `mode` accepts a string of
@@ -176,6 +181,40 @@ explicit mode is applied only to a newly created final directory. Missing
 parents use default permissions, with owner write/search access ensured.
 Existing directories are never chmodded. Windows permissions follow PHP and
 Windows semantics; Unix permission bits cannot provide equivalent guarantees.
+
+## Working directory
+
+```php
+$result = pwd(parseCommand('pwd -L'), $cwd);
+echo coreutilsHtml($result);
+
+$result = pwd(parseCommand('pwd -P'), $cwd);
+$path = $result['data']['path'];
+
+$result = pwd(['options' => ['logical' => true]], $cwd);
+```
+
+`pwd()` returns the supplied working directory, or the process directory from
+`getcwd()` if `$cwd` is omitted. It does not change directories or read sessions.
+The default is `-P`: an absolute physical path with symbolic links resolved.
+`-L` preserves the explicit `$cwd` when it is absolute and has no `.` or `..`
+components. Without an explicit `$cwd`, it uses the environment variable `PWD`
+only if it meets those rules and resolves to the current process directory.
+Missing, stale or invalid `PWD` values fall back to the physical path.
+
+For example, if `/home/user/project` links to `/srv/project`, passing
+`/home/user/project` as `$cwd` yields that path with `-L` and `/srv/project`
+with `-P`. Relative working directories or paths containing `.` / `..` use
+physical resolution in either mode, preserving the library's filesystem path
+semantics. An invalid explicit `$cwd` produces status 1, not a fallback to `PWD`.
+
+The last enabled `-L` / `-P` wins, including grouped flags such as `-PL`.
+Programmatic options use array insertion order; `false` options are ignored.
+The default is always physical, independent of `POSIXLY_CORRECT`.
+Operands and invalid options produce status 2; `--help` needs no valid cwd.
+Text output is the path followed by a newline, without quoting; HTML output
+escapes it using the shared formatter. Native Windows path behavior has not
+been validated in the WASM test environment.
 
 ## Finding entries
 

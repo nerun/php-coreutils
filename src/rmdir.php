@@ -1,5 +1,4 @@
 <?php
-
 # PHP Coreutils
 # A lightweight, pure-PHP implementation of classic Unix core utilities,
 # designed for portability and environments without shell access.
@@ -29,7 +28,6 @@
 
 require_once __DIR__ . '/lib/removal.php';
 
-function _rmdir(array $input, ?string $cwd = null): array
-{
+function _rmdir(array $input, ?string $cwd = null): array {
     return coreutilsRemove('rmdir', $input, $cwd);
 }

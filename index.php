@@ -35,6 +35,10 @@ function prompt(string $input, string $cwd): void
     $args = parseCommand($input);
 
     switch ($args['command']) {
+        case 'cp':
+            $result = cp($args, $cwd);
+            break;
+
         case 'find':
             $result = find($args, $cwd);
             break;
@@ -43,24 +47,24 @@ function prompt(string $input, string $cwd): void
             $result = ls($args, $cwd);
             break;
 
-        case 'rm':
-            $result = rm($args, $cwd);
-            break;
-
-        case 'rmdir':
-            $result = _rmdir($args, $cwd);
-            break;
-
-        case 'cp':
-            $result = cp($args, $cwd);
+        case 'mkdir':
+            $result = _mkdir($args, $cwd);
             break;
 
         case 'mv':
             $result = mv($args, $cwd);
             break;
 
-        case 'mkdir':
-            $result = _mkdir($args, $cwd);
+        case 'pwd':
+            $result = pwd($args, $cwd);
+            break;
+
+        case 'rm':
+            $result = rm($args, $cwd);
+            break;
+
+        case 'rmdir':
+            $result = _rmdir($args, $cwd);
             break;
 
         default:
@@ -112,7 +116,8 @@ $locales = str_replace(';', ";\n", (string) setlocale(LC_ALL, 0));
         <h1>OUTPUT</h1>
 
         <?php
-            prompt('ls -lha --group-directories-first', $cwd);
+prompt('pwd', $cwd);
+prompt('ls -lha --group-directories-first', $cwd);
 prompt('mkdir -p TESTE/a/c/d/e', $cwd);
 prompt('find TESTE', $cwd);
 prompt('mv TESTE/a TESTE/x', $cwd);

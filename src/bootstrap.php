@@ -1,5 +1,4 @@
 <?php
-
 # PHP Coreutils
 # A lightweight, pure-PHP implementation of classic Unix core utilities,
 # designed for portability and environments without shell access.
@@ -34,4 +33,5 @@ require_once __DIR__ . '/cp.php';
 require_once __DIR__ . '/rm.php';
 require_once __DIR__ . '/rmdir.php';
 require_once __DIR__ . '/find.php';
+require_once __DIR__ . '/pwd.php';
 require_once __DIR__ . '/lib/format.php';
