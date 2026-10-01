@@ -31,6 +31,15 @@
 function coreutilsOptionDefinitions(string $command): array
 {
     $common = ['help' => [null, 'help', false]];
+    if ($command === 'touch') {
+        return [
+            'access' => ['a', null, false],
+            'modification' => ['m', null, false],
+            'no-create' => ['c', 'no-create', false],
+            'reference' => ['r', 'reference', true],
+            'timestamp' => ['t', null, true],
+        ] + $common;
+    }
     if ($command === 'basename') {
         return [
             'multiple' => ['a', 'multiple', false],
@@ -103,6 +112,21 @@ function coreutilsOptionDefinitions(string $command): array
 
 function coreutilsHelp(string $command): string
 {
+    if ($command === 'touch') {
+        return "Usage: touch [OPTION]... FILE...\n"
+            . "Create empty files or update access and modification times.\n\n"
+            . "  -a                     change only access time\n"
+            . "  -m                     change only modification time\n"
+            . "  -c, --no-create        skip missing files without creating them\n"
+            . "  -r, --reference FILE   copy times from FILE\n"
+            . "  -t STAMP               use [[CC]YY]MMDDhhmm[.ss]\n"
+            . "      --help             show this help\n"
+            . "      --                 end options\n\n"
+            . "With neither -a nor -m, or with both, update both times.\n"
+            . "-r and -t cannot be combined; repeated values use the last alias.\n"
+            . "-t uses the application's timezone; an omitted year uses the current year.\n"
+            . "Symbolic links are followed; existing content is never truncated.\n";
+    }
     if ($command === 'basename') {
         return "Usage: basename [OPTION]... NAME [SUFFIX]\n"
             . "   or: basename -a [OPTION]... NAME...\n"

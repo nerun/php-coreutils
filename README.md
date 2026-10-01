@@ -12,7 +12,7 @@ The goal is practical, predictable behavior: do one thing well, keep interfaces
 simple, and let applications compose the returned data. This is a library, not
 a shell emulator or a complete GNU Coreutils replacement.
 
-Currently implemented: **ls**, **mkdir**, **mv**, **cp**, **rm**, **rmdir**, **find**, **pwd**, **basename** and **dirname**.
+Currently implemented: **ls**, **mkdir**, **mv**, **cp**, **rm**, **rmdir**, **find**, **pwd**, **basename**, **dirname** and **touch**.
 
 ## Requirements
 
@@ -40,7 +40,7 @@ require_once __DIR__ . '/php-coreutils/src/bootstrap.php';
 
 Alternatively, include each command file (`src/ls.php`, `src/mkdir.php`, `src/mv.php`,
 `src/cp.php`, `src/rm.php`, `src/rmdir.php`, `src/find.php`, `src/pwd.php`,
-`src/basename.php` or `src/dirname.php`) individually. For text or
+`src/basename.php`, `src/dirname.php` or `src/touch.php`) individually. For text or
 HTML formatting, also include `src/lib/format.php`.
 
 ## Usage
@@ -61,7 +61,7 @@ if ($result['status'] !== 0) {
 ```
 
 `_mkdir()` keeps its original name to avoid a collision with PHP's native
-`mkdir()` function. Similarly, `_rmdir()`, `_basename()` and `_dirname()` avoid
+`mkdir()` function. Similarly, `_rmdir()`, `_basename()`, `_dirname()` and `_touch()` avoid
 collisions with the corresponding native PHP functions.
 No command prints anything on its own.
 
@@ -101,7 +101,7 @@ Every command returns an array with these keys:
 
 | Key | Meaning |
 | --- | --- |
-| `command` | `ls`, `mkdir`, `mv`, `cp`, `rm`, `rmdir`, `find`, `pwd`, `basename` or `dirname`. |
+| `command` | `ls`, `mkdir`, `mv`, `cp`, `rm`, `rmdir`, `find`, `pwd`, `basename`, `dirname` or `touch`. |
 | `status` | `0`: success; `1`: filesystem error, possibly with partial success; `2`: invalid input. |
 | `data` | Structured results described below. Names and sizes are never HTML-escaped or preformatted. |
 | `errors` | Errors containing `code`, `message`, and `path` (which can be `null`). |
@@ -138,6 +138,11 @@ Every command returns an array with these keys:
 
 * `basename` / `dirname`: `data.entries` contains `input` / `output` string
   pairs in operand order. The output is unquoted and has no record terminator.
+
+* `touch`: `data.created` lists operand paths whose targets were absent before
+  a successful touch; `data.updated` lists existing targets successfully touched.
+  Both contain absolute operand paths, including link paths when supplied.
+  `data.skipped` contains `{path, reason: not-found}` entries skipped by `-c`.
 
 Syntax and option errors are checked before filesystem changes. Filesystem
 errors do not roll back earlier changes: remaining operands are still tried.
@@ -182,6 +187,11 @@ Applications needing separate output/error channels should use `data` and
 | basename | `-a`, `--multiple` | `multiple` |
 | basename | `-s SUFFIX`, `-sSUFFIX`, `--suffix SUFFIX`, `--suffix=SUFFIX` | `suffix` |
 | basename / dirname | `-z`, `--zero` | `zero` |
+| touch | `-a` | `access` |
+| touch | `-m` | `modification` |
+| touch | `-c`, `--no-create` | `no-create` |
+| touch | `-r FILE`, `-rFILE`, `--reference FILE`, `--reference=FILE` | `reference` |
+| touch | `-t STAMP`, `-tSTAMP` | `timestamp` |
 | all | `--help` | `help` |
 
 Boolean canonical options accept `true` or `false`. `mode` accepts a string of
@@ -189,11 +199,59 @@ three or four octal digits; symbolic modes are not implemented. The last
 occurrence of a mode alias wins. The last enabled `-h` or `--si` selects the size
 format; for programmatic options, array insertion order determines precedence.
 
-Without `-m`, creation uses `0777` filtered by the process umask. With `-m`, the
+For `mkdir`, without `-m`, creation uses `0777` filtered by the process umask. With `-m`, the
 explicit mode is applied only to a newly created final directory. Missing
 parents use default permissions, with owner write/search access ensured.
 Existing directories are never chmodded. Windows permissions follow PHP and
 Windows semantics; Unix permission bits cannot provide equivalent guarantees.
+
+## Creating files and changing timestamps
+
+```php
+$result = _touch(parseCommand('touch notes.txt "draft copy.txt"'), __DIR__);
+$result = _touch(parseCommand('touch -c -m notes.txt'), __DIR__);
+$result = _touch(parseCommand('touch -r original.txt copy.txt'), __DIR__);
+$result = _touch(parseCommand('touch -t202609301430.00 notes.txt'), __DIR__);
+echo coreutilsText($result); // Empty on success; diagnostics on failure.
+```
+
+`touch` creates an empty file when its target does not exist. It never truncates
+existing content, changes permissions, or creates missing parent directories.
+Creation permissions follow PHP and the process umask (normally `0666 & ~umask`
+on Unix). Existing directories can also have their timestamps updated.
+
+By default, both access (`atime`) and modification (`mtime`) times are updated
+to the current time. `-a` changes only access time; `-m` changes only modification
+time. With both flags, both times change. On existing entries the unselected
+time is preserved; on newly created files it uses the current time.
+
+`-c` / `--no-create` skips proven missing targets without an error; inaccessible
+paths, invalid traversal and link loops still produce diagnostics. `-r` / `--reference`
+copies the selected times from a local file or directory, resolved against the
+same cwd as the operands. The reference is read once before any changes, so a
+missing reference produces status 1 without modifying operands, even with `-c`.
+
+`-t` accepts `[[CC]YY]MMDDhhmm[.ss]` in the application's timezone: month, day,
+hour and minute are required; seconds default to `00`. Eight digits use the
+current year, ten digits use a two-digit year (`00`–`68`: 2000–2068;
+`69`–`99`: 1969–1999), and twelve digits specify the four-digit year.
+Invalid dates, including rollovers and leap-second values, return status 2
+before filesystem changes. `-r` and `-t` cannot be combined; repeated reference
+or timestamp options use the last value.
+
+Symbolic links are followed, including reference links. A dangling link can
+cause its target to be created; with `-c`, it is skipped and left intact.
+Link timestamps themselves are not changed. Timestamp precision and range,
+permissions and link behavior remain subject to PHP and the host filesystem;
+timestamps are supplied as whole seconds. Classification in `data` uses the
+target's state before the operation, not an atomic creation guarantee. The `-c`
+existence check is also non-atomic; callers must coordinate concurrent changes.
+
+`-d` / `--date`, `-h` / `--no-dereference`, `--time`, and GNU's special standard
+output handling for the operand `-` are not implemented. Here `-` is a literal
+filename. Neither birth time nor an arbitrary status-change time can be set.
+The command produces no output itself and successful operations are silent
+through the formatters. Use `data` to inspect created, updated or skipped paths.
 
 ## Basenames and directory names
 

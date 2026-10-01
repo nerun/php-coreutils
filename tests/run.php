@@ -423,6 +423,7 @@ require __DIR__ . '/removal.php';
 require __DIR__ . '/find.php';
 require __DIR__ . '/pwd.php';
 require __DIR__ . '/pathnames.php';
+require __DIR__ . '/touch.php';
 
 $passed = $failed = $skipped = 0;
 foreach ($tests as $name => $test) {
