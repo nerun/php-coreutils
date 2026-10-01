@@ -31,6 +31,29 @@
 function coreutilsOptionDefinitions(string $command): array
 {
     $common = ['help' => [null, 'help', false]];
+    if ($command === 'du') {
+        return [
+            'all' => ['a', 'all', false],
+            'summarize' => ['s', 'summarize', false],
+            'total' => ['c', 'total', false],
+            'human-readable' => ['h', 'human-readable', false],
+            'si' => [null, 'si', false],
+            'bytes' => ['b', 'bytes', false],
+            'apparent-size' => [null, 'apparent-size', false],
+            'block-size' => ['B', 'block-size', true],
+            'kibibytes' => ['k', null, false],
+            'mebibytes' => ['m', null, false],
+            'max-depth' => ['d', 'max-depth', true],
+            'dereference' => ['L', 'dereference', false],
+            'dereference-args' => ['D', 'dereference-args', false],
+            'dereference-args-alias' => ['H', null, false],
+            'no-dereference' => ['P', 'no-dereference', false],
+            'count-links' => ['l', 'count-links', false],
+            'separate-dirs' => ['S', 'separate-dirs', false],
+            'one-file-system' => ['x', 'one-file-system', false],
+            'null' => ['0', 'null', false],
+        ] + $common;
+    }
     if ($command === 'chmod') {
         return [
             'recursive' => ['R', 'recursive', false],
@@ -155,6 +178,35 @@ function coreutilsOptionDefinitions(string $command): array
 
 function coreutilsHelp(string $command): string
 {
+    if ($command === 'du') {
+        return "Usage: du [OPTION]... [FILE]...\n"
+            . "Estimate space usage recursively; the default operand is .\n\n"
+            . "  -a, --all              include files as well as directories\n"
+            . "  -s, --summarize        show only each operand's total\n"
+            . "  -c, --total            append a grand total\n"
+            . "  -h, --human-readable   scale by 1024; --si scales by 1000\n"
+            . "  -b, --bytes            apparent size in bytes\n"
+            . "      --apparent-size    use logical size instead of allocated blocks\n"
+            . "  -B, --block-size SIZE  positive integer with optional K/M/G/T/P/E, KB or KiB unit\n"
+            . "  -k / -m                use 1024 / 1048576 byte units\n"
+            . "  -d, --max-depth N      limit printed depth; still count deeper entries\n"
+            . "  -L, --dereference      follow all symbolic links\n"
+            . "  -D, -H, --dereference-args  follow only explicit link operands\n"
+            . "  -P, --no-dereference   count symbolic links themselves (default)\n"
+            . "  -l, --count-links      count repeated inodes; directory cycles are skipped\n"
+            . "  -S, --separate-dirs    exclude subdirectories from directory rows\n"
+            . "  -x, --one-file-system  do not enter directories on other devices\n"
+            . "  -0, --null             terminate output rows with NUL\n"
+            . "      --help             show this help\n"
+            . "      --                 end options\n\n"
+            . "Default units are 1024 bytes, rounded up; environment block sizes are ignored.\n"
+            . "Last scaling and link options win; -b always enables apparent size.\n"
+            . "Repeated inodes are counted once unless -l; hidden entries are included.\n"
+            . "Directory rows follow their children in byte-sorted order. No contents are read.\n"
+            . "Missing allocated-block metadata is ? with status 1; use -b on such platforms.\n"
+            . "Unknown or overflowing sizes propagate as ?; filesystem failures retain partial totals.\n"
+            . "Summarize conflicts with --all and nonzero --max-depth. No shell is executed.\n";
+    }
     if ($command === 'chmod') {
         return "Usage: chmod [OPTION]... MODE FILE...\n"
             . "   or: chmod [OPTION]... --reference=FILE FILE...\n"

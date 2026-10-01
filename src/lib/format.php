@@ -177,6 +177,19 @@ function coreutilsStatText(array $result): string
     return $output;
 }
 
+/** Scale du counts only for presentation; the result retains integer byte totals. */
+function coreutilsDuSizeText(?int $bytes, array $settings): string
+{
+    if ($bytes === null) {
+        return '?';
+    }
+    if ($settings['format'] !== 'blocks') {
+        return coreutilsHumanSize($bytes, $settings['format'] === 'si');
+    }
+    $unit = $settings['block-size'];
+    return (string) (intdiv($bytes, $unit) + ($bytes % $unit === 0 ? 0 : 1)) . $settings['suffix'];
+}
+
 /** Format both diagnostics and output as plain text; the original result stays reusable. */
 function coreutilsText(array $result): string
 {
@@ -187,6 +200,21 @@ function coreutilsText(array $result): string
     }
     if ($result['help'] !== null) {
         return implode("\n", $lines) . ($lines ? "\n" : '') . $result['help'];
+    }
+    if ($result['command'] === 'du') {
+        $output = $lines ? implode("\n", $lines) . "\n" : '';
+        $separator = ($result['options']['null'] ?? false) ? "\0" : "\n";
+        $settings = $result['data']['settings'];
+        if (!$settings) {
+            return $output;
+        }
+        foreach ($result['data']['entries'] as $entry) {
+            $output .= coreutilsDuSizeText($entry['bytes'], $settings) . "\t" . $entry['name'] . $separator;
+        }
+        if ($result['options']['total'] ?? false) {
+            $output .= coreutilsDuSizeText($result['data']['total'], $settings) . "\ttotal" . $separator;
+        }
+        return $output;
     }
     if ($result['command'] === 'stat') {
         return ($lines ? implode("\n", $lines) . "\n" : '') . coreutilsStatText($result);

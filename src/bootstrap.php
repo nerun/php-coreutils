@@ -44,4 +44,5 @@ require_once __DIR__ . '/tail.php';
 require_once __DIR__ . '/echo.php';
 require_once __DIR__ . '/chmod.php';
 require_once __DIR__ . '/stat.php';
+require_once __DIR__ . '/du.php';
 require_once __DIR__ . '/lib/format.php';

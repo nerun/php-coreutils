@@ -12,7 +12,7 @@ The goal is practical, predictable behavior: do one thing well, keep interfaces
 simple, and let applications compose the returned data. This is a library, not
 a shell emulator or a complete GNU Coreutils replacement.
 
-Currently implemented: **ls**, **mkdir**, **mv**, **cp**, **rm**, **rmdir**, **find**, **pwd**, **basename**, **dirname**, **touch**, **cat**, **head**, **tail**, **echo**, **chmod** and **stat**.
+Currently implemented: **ls**, **mkdir**, **mv**, **cp**, **rm**, **rmdir**, **find**, **pwd**, **basename**, **dirname**, **touch**, **cat**, **head**, **tail**, **echo**, **chmod**, **stat** and **du**.
 
 ## Requirements
 
@@ -41,7 +41,7 @@ require_once __DIR__ . '/php-coreutils/src/bootstrap.php';
 Alternatively, include each command file (`src/ls.php`, `src/mkdir.php`, `src/mv.php`,
 `src/cp.php`, `src/rm.php`, `src/rmdir.php`, `src/find.php`, `src/pwd.php`,
 `src/basename.php`, `src/dirname.php`, `src/touch.php`, `src/cat.php`,
-`src/head.php`, `src/tail.php`, `src/echo.php`, `src/chmod.php` or `src/stat.php`)
+`src/head.php`, `src/tail.php`, `src/echo.php`, `src/chmod.php`, `src/stat.php` or `src/du.php`)
 individually. For text or
 HTML formatting, also include `src/lib/format.php`.
 
@@ -108,7 +108,7 @@ Every command returns an array with these keys:
 
 | Key | Meaning |
 | --- | --- |
-| `command` | `ls`, `mkdir`, `mv`, `cp`, `rm`, `rmdir`, `find`, `pwd`, `basename`, `dirname`, `touch`, `cat`, `head`, `tail`, `echo`, `chmod` or `stat`. |
+| `command` | `ls`, `mkdir`, `mv`, `cp`, `rm`, `rmdir`, `find`, `pwd`, `basename`, `dirname`, `touch`, `cat`, `head`, `tail`, `echo`, `chmod`, `stat` or `du`. |
 | `status` | `0`: success; `1`: filesystem error, possibly with partial success; `2`: invalid input. |
 | `data` | Structured results described below. Names and sizes are never HTML-escaped or preformatted. |
 | `errors` | Errors containing `code`, `message`, and `path` (which can be `null`). |
@@ -176,6 +176,12 @@ Every command returns an array with these keys:
   `dev`, `ino`, `mode`, `nlink`, `uid`, `gid`, `rdev`, `size`, `atime`, `mtime`,
   `ctime`, `blocks`, `blksize`, and `birthtime`. These are raw metadata, not
   formatted strings; unavailable block values and birth time are `null`.
+
+* `du`: `data.entries` contains displayed rows with `name`, `path`, `type`,
+  `depth` (the operand is depth 0), and `bytes` (an integer or `null`).
+  `data.total` is the grand total in bytes, available even without `-c`.
+  `data.settings` records `apparent`, `links`, `max-depth`, `format`, `block-size`
+  and `suffix`. Sizes remain raw byte counts, regardless of display units.
 
 Syntax and option errors are checked before filesystem changes. Filesystem
 errors do not roll back earlier changes: remaining operands are still tried.
@@ -246,6 +252,25 @@ Applications needing separate output/error channels should use `data` and
 | chmod | `-c`, `--changes` | `changes` |
 | chmod | `--reference FILE`, `--reference=FILE` | `reference` |
 | chmod | Canonical array only (or first command-string operand) | `mode` |
+| du | `-a`, `--all` | `all` |
+| du | `-s`, `--summarize` | `summarize` |
+| du | `-c`, `--total` | `total` |
+| du | `-h`, `--human-readable` | `human-readable` |
+| du | `--si` | `si` |
+| du | `-b`, `--bytes` | `bytes` |
+| du | `--apparent-size` | `apparent-size` |
+| du | `-B SIZE`, `--block-size=SIZE` | `block-size` |
+| du | `-k` | `kibibytes` |
+| du | `-m` | `mebibytes` |
+| du | `-d N`, `--max-depth=N` | `max-depth` |
+| du | `-L`, `--dereference` | `dereference` |
+| du | `-D`, `--dereference-args` | `dereference-args` |
+| du | `-H` (alias for `-D`) | `dereference-args-alias` |
+| du | `-P`, `--no-dereference` | `no-dereference` |
+| du | `-l`, `--count-links` | `count-links` |
+| du | `-S`, `--separate-dirs` | `separate-dirs` |
+| du | `-x`, `--one-file-system` | `one-file-system` |
+| du | `-0`, `--null` | `null` |
 | stat | `-L`, `--dereference` | `dereference` |
 | stat | `-c FORMAT`, `-cFORMAT`, `--format FORMAT`, `--format=FORMAT` | `format` |
 | all | `--help` | `help` |
@@ -327,6 +352,73 @@ $result = _chmod([
     'options' => ['mode' => 'u=rw,go=r', 'changes' => true],
 ], __DIR__);
 ```
+
+## Disk usage
+
+```php
+echo coreutilsText(du(parseCommand('du -sh documents'), __DIR__));
+echo coreutilsText(du(parseCommand('du -ah --max-depth=1 documents'), __DIR__));
+echo coreutilsText(du(parseCommand('du -bc file1 file2'), __DIR__));
+
+$result = du([
+    'args' => ['documents'],
+    'options' => ['bytes' => true, 'summarize' => true],
+], __DIR__);
+$bytes = $result['data']['total'];
+```
+
+`du()` estimates usage from metadata without reading file contents. It includes
+hidden entries, walks directories iteratively, and emits directory rows after
+their children. Siblings are visited in byte-sorted order; explicit operands
+retain their supplied order. Without operands, the starting path is `.`.
+Explicit file operands are printed even without `-a`.
+
+By default it sums allocated `stat.blocks * 512`, including directory allocation,
+and prints totals in 1024-byte units rounded upward. This differs from apparent
+file size, especially for sparse files. `--apparent-size` sums logical byte sizes
+of regular files and symbolic links; directories and special files contribute
+zero. `-b` enables apparent size and selects byte units. `-h` uses powers of 1024;
+`--si` uses powers of 1000. The last scaling option wins, but later scaling does
+not cancel the apparent-size behavior enabled by `-b`.
+
+`-B` accepts a positive integer, optionally followed by K/M/G/T/P/E (powers of
+1024), KB/MB/etc. (powers of 1000), or KiB/MiB/etc. Suffix-only values such as
+`K` imply 1 and append the unit to each printed value; `1K` prints just the
+number of blocks. `human-readable` and `si` are also accepted. All numeric values
+must fit in a PHP integer. Block-size environment variables and
+`POSIXLY_CORRECT` do not alter the deterministic default.
+
+`-s` prints only the starting operands. `-d N` limits displayed depth, with
+starting operands at depth 0; deeper entries are still traversed and counted.
+`-s` conflicts with `-a` and with a nonzero `-d`. `-S` excludes subdirectories
+from each directory row, while `data.total` and the `-c` grand total still include
+all counted entries. `-0` replaces row-ending newlines with NUL. Names remain
+literal in text output, including embedded newlines; HTML output escapes them.
+Diagnostics retain newline separators even when `-0` is enabled.
+
+`-P` is the default: symbolic links themselves are counted, including dangling
+links. `-L` follows every link; `-D` and `-H` follow only explicit operands.
+The last link policy wins. A trailing separator requires a directory and follows
+a link to one. Broken links are errors when following them. Directory cycles
+are skipped, including with `-l`, while unresolvable link loops are errors.
+
+Device/inode identities are counted once across the entire invocation, so hard
+links and repeated operands do not inflate totals. `-l` counts each occurrence,
+except active directory cycles. When usable inode identities are unavailable,
+entries are not deduplicated; resolved directory paths still prevent cycles.
+`-x` skips descendant directories on other devices; each operand establishes
+its own starting device. It does not exclude an explicitly selected filesystem.
+
+Filesystem errors return status 1 and preserve partial counts, allowing later
+siblings and operands to proceed. Missing or invalid allocated-block metadata
+is never replaced by apparent size: affected rows and containing totals have
+`bytes: null`, display `?`, and return status 1. Use `-b` on platforms without
+allocated-block metadata. Integer overflow is also reported with unknown totals.
+Results are snapshots; concurrent filesystem changes can affect the estimate.
+
+This implementation does not support exclusion patterns, thresholds, inode-only
+counts, time columns, `--files0-from`, or standard-input lists. `-` is a literal
+filename. No shell or external program is executed.
 
 ## Inspecting metadata
 
@@ -941,7 +1033,8 @@ php -n tests/run.php
 The suite has no external dependencies. It covers parsing, paths, permissions,
 links, totals, HTML escaping, partial failures, reading boundaries, binary output,
 callback cleanup, echo byte escapes, output redirection, symbolic modes, recursive
-permission changes, metadata formatting and repeated calls. Unsupported
+permission changes, metadata formatting, disk usage, sparse files, hard-link
+deduplication, depth selection and repeated calls. Unsupported
 permission/symlink checks are reported as skipped, including when a runtime
 cannot enforce Unix permissions or the process can bypass them. A failure exits
 with status 1. Run on native PHP to validate actual operating-system semantics.
