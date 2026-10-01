@@ -42,4 +42,6 @@ require_once __DIR__ . '/cat.php';
 require_once __DIR__ . '/head.php';
 require_once __DIR__ . '/tail.php';
 require_once __DIR__ . '/echo.php';
+require_once __DIR__ . '/chmod.php';
+require_once __DIR__ . '/stat.php';
 require_once __DIR__ . '/lib/format.php';

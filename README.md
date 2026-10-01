@@ -12,7 +12,7 @@ The goal is practical, predictable behavior: do one thing well, keep interfaces
 simple, and let applications compose the returned data. This is a library, not
 a shell emulator or a complete GNU Coreutils replacement.
 
-Currently implemented: **ls**, **mkdir**, **mv**, **cp**, **rm**, **rmdir**, **find**, **pwd**, **basename**, **dirname**, **touch**, **cat**, **head**, **tail** and **echo**.
+Currently implemented: **ls**, **mkdir**, **mv**, **cp**, **rm**, **rmdir**, **find**, **pwd**, **basename**, **dirname**, **touch**, **cat**, **head**, **tail**, **echo**, **chmod** and **stat**.
 
 ## Requirements
 
@@ -41,7 +41,8 @@ require_once __DIR__ . '/php-coreutils/src/bootstrap.php';
 Alternatively, include each command file (`src/ls.php`, `src/mkdir.php`, `src/mv.php`,
 `src/cp.php`, `src/rm.php`, `src/rmdir.php`, `src/find.php`, `src/pwd.php`,
 `src/basename.php`, `src/dirname.php`, `src/touch.php`, `src/cat.php`,
-`src/head.php`, `src/tail.php` or `src/echo.php`) individually. For text or
+`src/head.php`, `src/tail.php`, `src/echo.php`, `src/chmod.php` or `src/stat.php`)
+individually. For text or
 HTML formatting, also include `src/lib/format.php`.
 
 ## Usage
@@ -63,7 +64,8 @@ if ($result['status'] !== 0) {
 ```
 
 `_mkdir()` keeps its original name to avoid a collision with PHP's native
-`mkdir()` function. Similarly, `_rmdir()`, `_basename()`, `_dirname()` and `_touch()` avoid
+`mkdir()` function. Similarly, `_rmdir()`, `_basename()`, `_dirname()`, `_touch()`,
+`_chmod()` and `_stat()` avoid
 collisions with the corresponding native PHP functions.
 `_echo()` avoids a collision with PHP's `echo` language construct.
 No command prints anything on its own.
@@ -106,7 +108,7 @@ Every command returns an array with these keys:
 
 | Key | Meaning |
 | --- | --- |
-| `command` | `ls`, `mkdir`, `mv`, `cp`, `rm`, `rmdir`, `find`, `pwd`, `basename`, `dirname`, `touch`, `cat`, `head`, `tail` or `echo`. |
+| `command` | `ls`, `mkdir`, `mv`, `cp`, `rm`, `rmdir`, `find`, `pwd`, `basename`, `dirname`, `touch`, `cat`, `head`, `tail`, `echo`, `chmod` or `stat`. |
 | `status` | `0`: success; `1`: filesystem error, possibly with partial success; `2`: invalid input. |
 | `data` | Structured results described below. Names and sizes are never HTML-escaped or preformatted. |
 | `errors` | Errors containing `code`, `message`, and `path` (which can be `null`). |
@@ -162,6 +164,18 @@ Every command returns an array with these keys:
   `target` (operand), `path` (absolute lookup path, or `null` for invalid cwd),
   `mode` (`overwrite` or `append`), `bytes` (bytes actually written), and
   `complete` (whether writing, flushing and closing succeeded).
+
+* `chmod`: `data.entries` records successful calls with `name`, `path`, `before`,
+  `requested`, `after` (permission bits as integers), and `changed` (boolean).
+  If post-change inspection fails, `after` and `changed` are `null` and status is 1;
+  the successful change is still recorded. `data.skipped` contains nested links
+  skipped during recursion as `{path, reason: symbolic-link}`.
+
+* `stat`: `data.entries` contains `name`, `path`, `type` (file type letter),
+  `filetype` (English description), `permissions`, `target` (link target or `null`),
+  `dev`, `ino`, `mode`, `nlink`, `uid`, `gid`, `rdev`, `size`, `atime`, `mtime`,
+  `ctime`, `blocks`, `blksize`, and `birthtime`. These are raw metadata, not
+  formatted strings; unavailable block values and birth time are `null`.
 
 Syntax and option errors are checked before filesystem changes. Filesystem
 errors do not roll back earlier changes: remaining operands are still tried.
@@ -227,10 +241,18 @@ Applications needing separate output/error channels should use `data` and
 | echo | `-E` | `literal` |
 | echo | `--version` (sole argument) | `version` |
 | echo | Environment / canonical array only | `posixly-correct` |
+| chmod | `-R`, `--recursive` | `recursive` |
+| chmod | `-v`, `--verbose` | `verbose` |
+| chmod | `-c`, `--changes` | `changes` |
+| chmod | `--reference FILE`, `--reference=FILE` | `reference` |
+| chmod | Canonical array only (or first command-string operand) | `mode` |
+| stat | `-L`, `--dereference` | `dereference` |
+| stat | `-c FORMAT`, `-cFORMAT`, `--format FORMAT`, `--format=FORMAT` | `format` |
 | all | `--help` | `help` |
 
-Boolean canonical options accept `true` or `false`. `mode` accepts a string of
-three or four octal digits; symbolic modes are not implemented. The last
+Boolean canonical options accept `true` or `false`. For `mkdir`, `mode` accepts a
+string of three or four octal digits; symbolic modes are not implemented for
+`mkdir`. For `chmod`, modes are described below. The last
 occurrence of a mode alias wins. The last enabled `-h` or `--si` selects the size
 format; for programmatic options, array insertion order determines precedence.
 
@@ -239,6 +261,126 @@ explicit mode is applied only to a newly created final directory. Missing
 parents use default permissions, with owner write/search access ensured.
 Existing directories are never chmodded. Windows permissions follow PHP and
 Windows semantics; Unix permission bits cannot provide equivalent guarantees.
+
+## Changing permissions
+
+```php
+$result = _chmod(parseCommand('chmod 644 notes.txt'), __DIR__);
+$result = _chmod(parseCommand('chmod u+x script.php'), __DIR__);
+$result = _chmod(parseCommand('chmod -R a+rwX documents'), __DIR__);
+$result = _chmod(parseCommand('chmod --reference=original.txt copy.txt'), __DIR__);
+echo coreutilsText($result); // Silent on success without -v or -c.
+```
+
+`chmod` changes files and directories with PHP's native `chmod()`. It accepts
+octal modes such as `0`, `600`, `0755`, and `2755`, interpreted as octal strings,
+not decimal PHP integers. Leading zeroes are allowed; the value must fit `07777`.
+Operator numeric modes (`+110`, `-6000`, `=755`) add, remove or replace bits.
+Use `--` before a mode beginning with `-`: `chmod -- -w file`.
+
+Symbolic modes use `u`, `g`, `o`, or `a`, then `+`, `-`, or `=`, and `r`, `w`,
+`x`, `X`, `s`, or `t`. A single `u`, `g`, or `o` in the permission position
+copies that class's current read/write/execute bits, for example `g=u`.
+Comma-separated clauses and successive operations are evaluated in order:
+`u=rw,g=u,o=r` and `a+r-w+x` are valid. `X` grants execute/search permission
+only to directories or entries currently executable by someone. Special bits
+follow their appropriate classes: `u+s`, `g+s`, and `o+t`.
+
+When the user classes are omitted, umask filters added or removed access bits.
+With `=`, unmentioned access bits are cleared and umask filters the new bits.
+Explicit `a` ignores umask. The process umask is read without changing it.
+Following GNU's directory rules, plain octal modes with four or fewer digits
+preserve existing directory setuid/setgid bits unless setting them; symbolic
+assignments also preserve them unless `s` is explicitly mentioned. Use
+`u-s,g-s`, `=755`, or `00755` to clear those directory bits explicitly.
+
+`--reference` follows its source link and captures its permission bits once
+before any changes. It copies those bits exactly, without directory-bit
+preservation. A missing or inaccessible reference aborts the operation.
+Canonical `mode` and `reference` cannot be combined.
+
+`-R` / `--recursive` includes hidden entries. Explicit link operands are followed,
+including directory links; links encountered within a tree are skipped, including
+broken links and loops. Intermediate components follow normal filesystem rules.
+Directory read/search additions are applied before traversal to permit restoring
+access; other directory changes are deferred until children have been processed.
+Siblings use byte order. Recursive filesystem roots are refused. Traversal order
+and diagnostics are the library's contract, not exact GNU output compatibility.
+
+`-v` reports every successful operation, including unchanged modes; `-c` reports
+only observed changes. The last enabled `-v` / `-c` wins, including insertion
+order for canonical arrays. Requested and observed modes are recorded separately
+because the OS may clear or ignore special bits. Failed calls remain in `errors`.
+
+Permissions are subject to the PHP account, filesystem, ACLs and hosting rules;
+Windows cannot reproduce all Unix permission semantics. Neither ownership nor
+ACLs are explicitly changed. Changes are not transactional and path checks are
+not atomic; errors do not undo earlier changes and pending entries are still tried.
+`-f`, `-H`, `-L`, `-P`, `--no-dereference`, and version/root-control options are
+not implemented.
+
+Canonical mode input can keep the filenames separate:
+
+```php
+$result = _chmod([
+    'args' => ['notes.txt', 'draft.txt'],
+    'options' => ['mode' => 'u=rw,go=r', 'changes' => true],
+], __DIR__);
+```
+
+## Inspecting metadata
+
+```php
+echo coreutilsText(_stat(parseCommand('stat notes.txt'), __DIR__));
+echo coreutilsText(_stat(parseCommand('stat -L shortcut'), __DIR__));
+echo coreutilsText(_stat(parseCommand('stat -c "%n: %s bytes, %a (%A)" notes.txt'), __DIR__));
+
+$result = _stat(['args' => ['notes.txt']], __DIR__);
+$metadata = $result['data']['entries'][0];
+```
+
+`stat` inspects entries with `lstat()` by default, including broken symbolic links.
+`-L` / `--dereference` inspects their targets instead; broken links then fail.
+A trailing separator requests a directory according to the OS, so a directory
+link supplied with `/` can be dereferenced even without `-L`.
+Regular files, directories and special files are inspected without opening their
+contents. Multiple operands preserve order and successful entries survive errors.
+Every lookup clears PHP's stat cache; the result remains a non-atomic snapshot.
+
+The default formatter displays name/target, size, blocks, I/O block size, type,
+device, inode, link count, permissions, ownership and access/modification/status
+change times. Dates use the application's timezone and whole-second precision.
+`ctime` means status-change time, not creation time. PHP's portable stat API does
+not expose birth time, so `birthtime` is `null`, `%w` is `-`, and `%W` is `0`.
+Unavailable block counts and I/O sizes are `null` in data and `?` in text.
+`blocks` counts 512-byte allocation units; `size` is logical bytes.
+
+`-c` / `--format` supports the following GNU-style directives, followed by one
+newline per successful operand. Repeated formats use the last value. Backslashes
+stay literal; include an actual newline in the format when needed.
+
+| Directive | Value |
+| --- | --- |
+| `%n`, `%N` | Raw operand; operand quoted with the shared name formatter, with a link target when applicable. |
+| `%s` | Logical size in bytes. |
+| `%a`, `%A`, `%f`, `%F` | Octal permission bits; symbolic permissions/type; hexadecimal raw mode; type description. |
+| `%u`, `%U`, `%g`, `%G` | Owner UID/name and group GID/name; names fall back to numbers without `posix`. |
+| `%h`, `%i` | Hard link count and inode. |
+| `%d`, `%D`, `%r`, `%R` | Containing device in decimal/hex; represented device (`rdev`) in decimal/hex. |
+| `%b`, `%B`, `%o` | Allocated blocks; allocation unit (512 bytes); I/O block size. |
+| `%x`, `%X`, `%y`, `%Y`, `%z`, `%Z` | Access, modification and status-change times, as dates or Unix timestamps. |
+| `%w`, `%W` | Unavailable birth time (`-` / `0`). |
+| `%%` | Literal percent sign. |
+
+Simple field widths up to 8192 bytes are supported: `%10s`, `%-20n`, and `%04a`.
+`-` aligns left; `0` pads numeric fields with zeroes. Other flags, precision and
+compound directives are rejected, as are incomplete/unsupported directives and
+NUL bytes, before filesystem access. An empty format prints one newline per entry.
+The default view and `%N` use the project's existing quoting rules. Values are
+limited by PHP's integer range and metadata available on the host; native Windows
+behavior is not covered by the Linux/WASM tests. `-f`, `-t`, `--printf`,
+`--cached`, security-context/mount-point directives and version output are not
+implemented.
 
 ## Printing text and redirecting output
 
@@ -798,7 +940,8 @@ php -n tests/run.php
 
 The suite has no external dependencies. It covers parsing, paths, permissions,
 links, totals, HTML escaping, partial failures, reading boundaries, binary output,
-callback cleanup, echo byte escapes, output redirection and repeated calls. Unsupported
+callback cleanup, echo byte escapes, output redirection, symbolic modes, recursive
+permission changes, metadata formatting and repeated calls. Unsupported
 permission/symlink checks are reported as skipped, including when a runtime
 cannot enforce Unix permissions or the process can bypass them. A failure exits
 with status 1. Run on native PHP to validate actual operating-system semantics.

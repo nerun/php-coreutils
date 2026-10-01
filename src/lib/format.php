@@ -110,6 +110,73 @@ function coreutilsFormatEntries(array $entries, array $settings, $formatter, arr
     return $lines;
 }
 
+/** Produce portable stat fields; PHP exposes timestamps only at whole-second precision. */
+function coreutilsStatValues(array $entry, array &$users, array &$groups): array
+{
+    $name = coreutilsQuoteName($entry['name']);
+    if ($entry['target'] !== null) {
+        $name .= ' -> ' . coreutilsQuoteName($entry['target']);
+    }
+    return [
+        '%' => '%', 'n' => $entry['name'], 'N' => $name, 's' => (string) $entry['size'],
+        'a' => decoct($entry['mode'] & 07777), 'A' => $entry['permissions'],
+        'f' => dechex($entry['mode']), 'F' => $entry['filetype'],
+        'u' => (string) $entry['uid'], 'U' => coreutilsIdentity($entry['uid'], false, $users),
+        'g' => (string) $entry['gid'], 'G' => coreutilsIdentity($entry['gid'], true, $groups),
+        'h' => (string) $entry['nlink'], 'i' => (string) $entry['ino'],
+        'd' => (string) $entry['dev'], 'D' => dechex($entry['dev']),
+        'r' => (string) $entry['rdev'], 'R' => dechex($entry['rdev']),
+        'b' => $entry['blocks'] === null ? '?' : (string) $entry['blocks'], 'B' => '512',
+        'o' => $entry['blksize'] === null ? '?' : (string) $entry['blksize'],
+        'x' => date('Y-m-d H:i:s O', $entry['atime']), 'X' => (string) $entry['atime'],
+        'y' => date('Y-m-d H:i:s O', $entry['mtime']), 'Y' => (string) $entry['mtime'],
+        'z' => date('Y-m-d H:i:s O', $entry['ctime']), 'Z' => (string) $entry['ctime'],
+        'w' => '-', 'W' => '0',
+    ];
+}
+
+function coreutilsStatText(array $result): string
+{
+    $users = $groups = [];
+    $format = isset($result['options']['format']) ? coreutilsStatFormat($result['options']['format']) : null;
+    $output = '';
+    foreach ($result['data']['entries'] as $entry) {
+        $values = coreutilsStatValues($entry, $users, $groups);
+        if ($format !== null) {
+            foreach ($format as $part) {
+                if (is_string($part)) {
+                    $output .= $part;
+                    continue;
+                }
+                $value = $values[$part['code']];
+                $numeric = strpos('abBdDfghiorRsuWXYZ', $part['code']) !== false;
+                $padding = $part['flag'] === '0' && $numeric && $value !== '?' ? '0' : ' ';
+                $side = $part['flag'] === '-' ? STR_PAD_RIGHT : STR_PAD_LEFT;
+                // A minus sign precedes numeric zero padding, as in printf.
+                if ($padding === '0' && $value !== '' && $value[0] === '-' && is_numeric($value)) {
+                    $value = '-' . str_pad(substr($value, 1), max(0, $part['width'] - 1), '0', STR_PAD_LEFT);
+                } else {
+                    $value = str_pad($value, $part['width'], $padding, $side);
+                }
+                $output .= $value;
+            }
+            $output .= "\n";
+            continue;
+        }
+        $output .= '  File: ' . $values['N'] . "\n"
+            . '  Size: ' . $values['s'] . "\tBlocks: " . $values['b']
+            . "\tIO Block: " . $values['o'] . '  ' . $values['F'] . "\n"
+            . 'Device: ' . $values['D'] . 'h/' . $values['d'] . 'd'
+            . "\tInode: " . $values['i'] . "  Links: " . $values['h'] . "\n"
+            . 'Access: (' . str_pad($values['a'], 4, '0', STR_PAD_LEFT) . '/' . $values['A'] . ')'
+            . '  Uid: (' . $values['u'] . '/' . $values['U'] . ')'
+            . '  Gid: (' . $values['g'] . '/' . $values['G'] . ")\n"
+            . 'Access: ' . $values['x'] . "\nModify: " . $values['y']
+            . "\nChange: " . $values['z'] . "\n Birth: -\n";
+    }
+    return $output;
+}
+
 /** Format both diagnostics and output as plain text; the original result stays reusable. */
 function coreutilsText(array $result): string
 {
@@ -120,6 +187,27 @@ function coreutilsText(array $result): string
     }
     if ($result['help'] !== null) {
         return implode("\n", $lines) . ($lines ? "\n" : '') . $result['help'];
+    }
+    if ($result['command'] === 'stat') {
+        return ($lines ? implode("\n", $lines) . "\n" : '') . coreutilsStatText($result);
+    }
+    if ($result['command'] === 'chmod') {
+        $report = null;
+        foreach ($result['options'] as $name => $enabled) {
+            if ($enabled === true && in_array($name, ['verbose', 'changes'], true)) {
+                $report = $name;
+            }
+        }
+        foreach ($result['data']['entries'] as $entry) {
+            if ($report === null || ($report === 'changes' && $entry['changed'] !== true)) {
+                continue;
+            }
+            $before = str_pad(decoct($entry['before']), 4, '0', STR_PAD_LEFT);
+            $after = $entry['after'] === null ? '?' : str_pad(decoct($entry['after']), 4, '0', STR_PAD_LEFT);
+            $lines[] = 'mode of ' . coreutilsQuoteName($entry['name']) . ($entry['changed'] === false
+                ? ' retained as ' . $after : ' changed from ' . $before . ' to ' . $after);
+        }
+        return $lines ? implode("\n", $lines) . "\n" : '';
     }
     if (in_array($result['command'], ['cat', 'head', 'tail'], true)) {
         $output = $lines ? implode("\n", $lines) . "\n" : '';

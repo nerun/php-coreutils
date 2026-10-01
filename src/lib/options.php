@@ -31,6 +31,21 @@
 function coreutilsOptionDefinitions(string $command): array
 {
     $common = ['help' => [null, 'help', false]];
+    if ($command === 'chmod') {
+        return [
+            'recursive' => ['R', 'recursive', false],
+            'verbose' => ['v', 'verbose', false],
+            'changes' => ['c', 'changes', false],
+            'reference' => [null, 'reference', true],
+            'mode' => [null, null, true],
+        ] + $common;
+    }
+    if ($command === 'stat') {
+        return [
+            'dereference' => ['L', 'dereference', false],
+            'format' => ['c', 'format', true],
+        ] + $common;
+    }
     if ($command === 'echo') {
         return [
             'no-newline' => ['n', null, false],
@@ -140,6 +155,37 @@ function coreutilsOptionDefinitions(string $command): array
 
 function coreutilsHelp(string $command): string
 {
+    if ($command === 'chmod') {
+        return "Usage: chmod [OPTION]... MODE FILE...\n"
+            . "   or: chmod [OPTION]... --reference=FILE FILE...\n"
+            . "Change permission bits using octal or symbolic modes.\n\n"
+            . "  -R, --recursive       change directories and their contents\n"
+            . "  -v, --verbose         report every successful operation\n"
+            . "  -c, --changes         report only actual mode changes; last -v/-c wins\n"
+            . "      --reference FILE  copy the referenced target's permission bits\n"
+            . "      --help             show this help\n"
+            . "      --                 end options; needed before modes such as -w\n\n"
+            . "Modes: 755, 0644, +110, =755, u+x, go-w, a=rw, a+rwX, g=u.\n"
+            . "Symbolic clauses use u/g/o/a, +/-/=, rwxXst or one copy source u/g/o.\n"
+            . "Omitted u/g/o/a respects umask; directory setuid/setgid bits follow GNU rules.\n"
+            . "Explicit links are followed; nested links are skipped. Directory access is granted\n"
+            . "before traversal; restrictions are deferred until children are processed.\n"
+            . "Recursive filesystem roots are refused. No shell is executed.\n";
+    }
+    if ($command === 'stat') {
+        return "Usage: stat [OPTION]... FILE...\n"
+            . "Display entry metadata without reading file contents.\n\n"
+            . "  -L, --dereference     inspect targets instead of symbolic links\n"
+            . "  -c, --format FORMAT   use FORMAT, followed by a newline for each entry\n"
+            . "      --help             show this help\n"
+            . "      --                 end options\n\n"
+            . "Formats: %n %N %s %a %A %f %F %u %U %g %G %h %i %d %D %r %R\n"
+            . "         %b %B %o %x %X %y %Y %z %Z %w %W %%.\n"
+            . "Field widths up to 8192, left alignment (-) and zero padding (0) are supported.\n"
+            . "Unavailable block information is ?; birth time is - / 0 (not exposed by PHP).\n"
+            . "Times use whole seconds and the application's timezone; ctime is status change.\n"
+            . "Backslashes in FORMAT stay literal. Filesystem statistics and --printf are not supported.\n";
+    }
     if ($command === 'echo') {
         return "Usage: echo [SHORT-OPTION]... [STRING]... [> FILE | >> FILE]\n"
             . "   or: echo --help | --version\n"
