@@ -31,6 +31,25 @@
 function coreutilsOptionDefinitions(string $command): array
 {
     $common = ['help' => [null, 'help', false]];
+    if ($command === 'cat') {
+        return [
+            'number' => ['n', 'number', false],
+            'number-nonblank' => ['b', 'number-nonblank', false],
+            'squeeze-blank' => ['s', 'squeeze-blank', false],
+            'show-ends' => ['E', 'show-ends', false],
+            'show-tabs' => ['T', 'show-tabs', false],
+        ] + $common;
+    }
+    if (in_array($command, ['head', 'tail'], true)) {
+        return [
+            'lines' => ['n', 'lines', true],
+            'bytes' => ['c', 'bytes', true],
+            'quiet' => ['q', 'quiet', false],
+            'silent' => [null, 'silent', false],
+            'verbose' => ['v', 'verbose', false],
+            'zero-terminated' => ['z', 'zero-terminated', false],
+        ] + $common;
+    }
     if ($command === 'touch') {
         return [
             'access' => ['a', null, false],
@@ -112,6 +131,36 @@ function coreutilsOptionDefinitions(string $command): array
 
 function coreutilsHelp(string $command): string
 {
+    if ($command === 'cat') {
+        return "Usage: cat [OPTION]... FILE...\n"
+            . "Concatenate local regular files in operand order.\n\n"
+            . "  -n, --number           number all output lines\n"
+            . "  -b, --number-nonblank  number nonempty lines; overrides -n\n"
+            . "  -s, --squeeze-blank    suppress repeated empty lines\n"
+            . "  -E, --show-ends        display $ before each newline\n"
+            . "  -T, --show-tabs        display tabs as ^I\n"
+            . "      --help             show this help\n"
+            . "      --                 end options\n\n"
+            . "Files are read in binary mode; no separators or final newline are added.\n"
+            . "Line state continues across files. FILE is required; - is a literal filename.\n";
+    }
+    if (in_array($command, ['head', 'tail'], true)) {
+        $selection = $command === 'head' ? 'first' : 'last';
+        return "Usage: $command [OPTION]... FILE...\n"
+            . "Read the $selection 10 lines of each local regular file by default.\n\n"
+            . "  -n, --lines NUM        select NUM lines\n"
+            . "  -c, --bytes NUM        select NUM bytes\n"
+            . "  -q, --quiet, --silent  never show filename headers\n"
+            . "  -v, --verbose          always show filename headers\n"
+            . "  -z, --zero-terminated  use NUL instead of newline as record delimiter\n"
+            . "      --help             show this help\n"
+            . "      --                 end options\n\n"
+            . ($command === 'head' ? "A negative NUM selects all but the last NUM lines or bytes.\n"
+                : "A +NUM selects from line or byte NUM (one-based; +0 also means the start).\n")
+            . "Counts are decimal integers without suffixes; the last -n or -c wins.\n"
+            . "Headers appear with multiple operands unless -q or -v overrides this.\n"
+            . "FILE is required; - is a literal filename. Continuous following is not supported.\n";
+    }
     if ($command === 'touch') {
         return "Usage: touch [OPTION]... FILE...\n"
             . "Create empty files or update access and modification times.\n\n"

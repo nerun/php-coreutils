@@ -117,6 +117,19 @@ function coreutilsText(array $result): string
     if ($result['help'] !== null) {
         return implode("\n", $lines) . ($lines ? "\n" : '') . $result['help'];
     }
+    if (in_array($result['command'], ['cat', 'head', 'tail'], true)) {
+        $output = $lines ? implode("\n", $lines) . "\n" : '';
+        if ($result['data']['streamed']) {
+            return $output;
+        }
+        foreach ($result['data']['entries'] as $index => $entry) {
+            if ($result['data']['headers']) {
+                $output .= ($index > 0 ? "\n" : '') . '==> ' . coreutilsQuoteName($entry['name']) . " <==\n";
+            }
+            $output .= $entry['content'];
+        }
+        return $output;
+    }
     if (in_array($result['command'], ['basename', 'dirname'], true)) {
         $separator = ($result['options']['zero'] ?? false) ? "\0" : "\n";
         $values = array_column($result['data']['entries'], 'output');

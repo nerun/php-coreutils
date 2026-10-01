@@ -12,7 +12,7 @@ The goal is practical, predictable behavior: do one thing well, keep interfaces
 simple, and let applications compose the returned data. This is a library, not
 a shell emulator or a complete GNU Coreutils replacement.
 
-Currently implemented: **ls**, **mkdir**, **mv**, **cp**, **rm**, **rmdir**, **find**, **pwd**, **basename**, **dirname** and **touch**.
+Currently implemented: **ls**, **mkdir**, **mv**, **cp**, **rm**, **rmdir**, **find**, **pwd**, **basename**, **dirname**, **touch**, **cat**, **head** and **tail**.
 
 ## Requirements
 
@@ -40,7 +40,8 @@ require_once __DIR__ . '/php-coreutils/src/bootstrap.php';
 
 Alternatively, include each command file (`src/ls.php`, `src/mkdir.php`, `src/mv.php`,
 `src/cp.php`, `src/rm.php`, `src/rmdir.php`, `src/find.php`, `src/pwd.php`,
-`src/basename.php`, `src/dirname.php` or `src/touch.php`) individually. For text or
+`src/basename.php`, `src/dirname.php`, `src/touch.php`, `src/cat.php`,
+`src/head.php` or `src/tail.php`) individually. For text or
 HTML formatting, also include `src/lib/format.php`.
 
 ## Usage
@@ -64,6 +65,8 @@ if ($result['status'] !== 0) {
 `mkdir()` function. Similarly, `_rmdir()`, `_basename()`, `_dirname()` and `_touch()` avoid
 collisions with the corresponding native PHP functions.
 No command prints anything on its own.
+`cat()`, `head()` and `tail()` also accept an optional third argument: a callback
+that receives output blocks instead of accumulating their content in the result.
 
 For a web interface, use the HTML formatter. It escapes the entire output,
 including names, link targets, and error messages:
@@ -101,7 +104,7 @@ Every command returns an array with these keys:
 
 | Key | Meaning |
 | --- | --- |
-| `command` | `ls`, `mkdir`, `mv`, `cp`, `rm`, `rmdir`, `find`, `pwd`, `basename`, `dirname` or `touch`. |
+| `command` | `ls`, `mkdir`, `mv`, `cp`, `rm`, `rmdir`, `find`, `pwd`, `basename`, `dirname`, `touch`, `cat`, `head` or `tail`. |
 | `status` | `0`: success; `1`: filesystem error, possibly with partial success; `2`: invalid input. |
 | `data` | Structured results described below. Names and sizes are never HTML-escaped or preformatted. |
 | `errors` | Errors containing `code`, `message`, and `path` (which can be `null`). |
@@ -143,6 +146,14 @@ Every command returns an array with these keys:
   a successful touch; `data.updated` lists existing targets successfully touched.
   Both contain absolute operand paths, including link paths when supplied.
   `data.skipped` contains `{path, reason: not-found}` entries skipped by `-c`.
+
+* `cat` / `head` / `tail`: `data.entries` contains `name` (operand), `path`
+  (absolute lookup path), `content` (selected/transformed bytes), `bytes`
+  (output byte count), and `complete` (whether the selection was fully read).
+  Failed opens are reported in `errors`; partial reads retain an entry with
+  `complete: false`. `data.headers` records the requested filename-header policy.
+  With an output callback, `data.streamed` is `true` and each entry's `content`
+  is `null`; `bytes` counts blocks accepted by the callback.
 
 Syntax and option errors are checked before filesystem changes. Filesystem
 errors do not roll back earlier changes: remaining operands are still tried.
@@ -192,6 +203,17 @@ Applications needing separate output/error channels should use `data` and
 | touch | `-c`, `--no-create` | `no-create` |
 | touch | `-r FILE`, `-rFILE`, `--reference FILE`, `--reference=FILE` | `reference` |
 | touch | `-t STAMP`, `-tSTAMP` | `timestamp` |
+| cat | `-n`, `--number` | `number` |
+| cat | `-b`, `--number-nonblank` | `number-nonblank` |
+| cat | `-s`, `--squeeze-blank` | `squeeze-blank` |
+| cat | `-E`, `--show-ends` | `show-ends` |
+| cat | `-T`, `--show-tabs` | `show-tabs` |
+| head / tail | `-n NUM`, `-nNUM`, `--lines NUM`, `--lines=NUM` | `lines` |
+| head / tail | `-c NUM`, `-cNUM`, `--bytes NUM`, `--bytes=NUM` | `bytes` |
+| head / tail | `-q`, `--quiet` | `quiet` |
+| head / tail | `--silent` (equivalent to `--quiet`) | `silent` |
+| head / tail | `-v`, `--verbose` | `verbose` |
+| head / tail | `-z`, `--zero-terminated` | `zero-terminated` |
 | all | `--help` | `help` |
 
 Boolean canonical options accept `true` or `false`. `mode` accepts a string of
@@ -204,6 +226,111 @@ explicit mode is applied only to a newly created final directory. Missing
 parents use default permissions, with owner write/search access ensured.
 Existing directories are never chmodded. Windows permissions follow PHP and
 Windows semantics; Unix permission bits cannot provide equivalent guarantees.
+
+## Reading files
+
+```php
+echo coreutilsText(cat(parseCommand('cat first.txt second.txt'), __DIR__));
+echo coreutilsText(cat(parseCommand('cat -n notes.txt'), __DIR__));
+echo coreutilsText(head(parseCommand('head -n 5 notes.txt'), __DIR__));
+echo coreutilsText(tail(parseCommand('tail -n 20 application.log'), __DIR__));
+echo coreutilsText(tail(parseCommand('tail -c 100 data.bin'), __DIR__));
+```
+
+All three commands use shared helpers in `src/lib/reading.php` for local path
+resolution, opening files, bounded reads, selection, errors and resource cleanup.
+They require at least one operand, follow symbolic links to regular files and
+reject directories and special files, including FIFOs and devices. A broken or
+inaccessible link produces status 1. `-` is a literal filename; standard input
+is not read. Paths, quotes, `--`, explicit cwd and validation follow the same
+rules as other filesystem commands.
+
+Reads use binary mode. Newline (`LF`) separates lines; `CR` bytes are preserved
+by default, including in `CRLF` files. An unterminated final record counts as a line; a
+trailing delimiter does not create an extra empty record. Byte selection counts
+bytes, not characters, and can split a UTF-8 character. No final newline is
+added to content. `coreutilsHtml()` escapes output and replaces invalid UTF-8;
+use `content`, `coreutilsText()` or a callback for byte-preserving output.
+
+### Concatenating files
+
+`cat` concatenates files in operand order without headers or separators.
+`-n` numbers all output lines, starting at 1, with a six-column number and a
+tab. `-b` numbers only nonempty lines and overrides `-n`, regardless of order.
+`-s` retains at most one consecutive empty line. An empty line means a lone
+`LF`; a line containing spaces, tabs or `CR` is not empty.
+
+`-E` inserts `$` before each `LF` and renders `CRLF` as `^M$` followed by `LF`,
+leaving unterminated final lines unchanged.
+`-T` renders input tabs as `^I`; tabs introduced by numbering remain tabs.
+Numbering, partial lines and blank-line state continue across blocks and files,
+so concatenating files does not introduce a new line boundary. A final `CR`
+can be deferred to the next operand's output to recognize a split `CRLF`.
+Only these
+presentation options are supported; GNU's `-v`, `-A`, `-e`, `-t` and `-u` are not.
+
+### Selecting the beginning or end
+
+`head` and `tail` default to ten lines per operand. `-n` / `--lines` selects
+lines, and `-c` / `--bytes` selects bytes. The last occurrence across both
+options determines the selection unit and count; canonical arrays use insertion
+order. Counts must be decimal strings within `PHP_INT_MAX`, optionally prefixed
+by `+` or `-`. Size suffixes such as `K`, `KB` or `MiB` and legacy forms such as
+`head -5` are not supported. Zero is valid.
+
+`head -n 5` reads the first five lines; `head -n -5` reads everything except the
+last five. The same rule applies to bytes. A positive or `+` count selects the
+beginning. Thus `head -n 0` is empty and `head -n -0` selects the whole file.
+
+`tail -n 5` reads the last five lines; `tail -n +5` reads from line five onward
+(one-based). The same rule applies to bytes. `tail -n 0` is empty; `+0` and
+`+1` both start at the beginning. A `-` count also selects from the end.
+Counts larger than the file select everything or nothing according to the mode.
+`-z` / `--zero-terminated` uses NUL as the record separator; it has no effect on
+byte selection. Reverse scanning handles long and unterminated records without
+keeping whole lines in memory.
+
+The text formatter adds `==> filename <==` headers when there are multiple
+operands. `-q` / `--quiet` / `--silent` suppress headers, and `-v` / `--verbose`
+forces them even for one operand; the last enabled option wins. Header names use
+the same quoting helper as other commands. `content` never contains headers.
+`tail` is a one-shot read: `-f`, `-F`, follow/retry options and continuous
+monitoring are not implemented.
+
+### Memory and output callbacks
+
+Without a callback, selected content accumulates in `data.entries`; memory use
+is proportional to output size. Reading in blocks alone does not make a buffered
+`cat` suitable for arbitrarily large files. For bounded-memory consumption, pass
+a callback that processes or writes each block without retaining it:
+
+```php
+$hash = hash_init('sha256');
+$result = cat(parseCommand('cat large.bin'), __DIR__,
+    function (string $block, array $file) use ($hash): void {
+        // $file contains the operand name and its absolute path.
+        hash_update($hash, $block);
+    }
+);
+if ($result['status'] === 0) {
+    $digest = hash_final($hash);
+}
+```
+
+Callbacks receive selected/transformed content only, without filename headers
+or diagnostics. Empty selections do not invoke the callback. Returning exactly
+`false` stops the command, records status 1 and `output-error`, and leaves
+`complete: false` on that entry. Any other return value accepts the block.
+Callback exceptions propagate to the caller; the file handle is still closed.
+Output already delivered cannot be rolled back. In callback mode, formatters
+return only diagnostics or help and never repeat the streamed content.
+
+The helpers read at most 8192 input bytes per block; `cat` transformations can
+increase the size of a delivered block. File size is captured on open; later
+appends are not included and truncation can cause a partial-read error. Reads
+may update filesystem access times. Neither content nor permissions are changed.
+As with other commands, filesystem errors allow remaining operands to be tried;
+invalid input returns status 2 before reading or calling the callback.
 
 ## Creating files and changing timestamps
 
@@ -582,7 +709,8 @@ php -n tests/run.php
 ```
 
 The suite has no external dependencies. It covers parsing, paths, permissions,
-links, totals, HTML escaping, partial failures and repeated calls. Unsupported
+links, totals, HTML escaping, partial failures, reading boundaries, binary output,
+callback cleanup and repeated calls. Unsupported
 permission/symlink checks are reported as skipped, including when a runtime
 cannot enforce Unix permissions or the process can bypass them. A failure exits
 with status 1. Run on native PHP to validate actual operating-system semantics.
