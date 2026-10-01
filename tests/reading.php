@@ -30,21 +30,31 @@ $tests['cat numbering and blank squeezing share logical lines across file bounda
     file_put_contents($base . '/a', "alpha");
     file_put_contents($base . '/b', "beta\n\n\n");
     file_put_contents($base . '/c', "\ngamma\nlast");
-    same("     1\talphabeta\n     2\t\n     3\t\n     4\t\n     5\tgamma\n     6\tlast",
-        coreutilsText(cat(parseCommand('cat -n a b c'), $base)));
-    same("     1\talphabeta\n\n\n\n     2\tgamma\n     3\tlast",
-        coreutilsText(cat(parseCommand('cat -bn a b c'), $base)));
-    same("     1\talphabeta\n\n     2\tgamma\n     3\tlast",
-        coreutilsText(cat(parseCommand('cat -nbs a b c'), $base)));
-    same("     1\talphabeta\n     2\t\n     3\tgamma\n     4\tlast",
-        coreutilsText(cat(parseCommand('cat --number --squeeze-blank a b c'), $base)));
+    same(
+        "     1\talphabeta\n     2\t\n     3\t\n     4\t\n     5\tgamma\n     6\tlast",
+        coreutilsText(cat(parseCommand('cat -n a b c'), $base))
+    );
+    same(
+        "     1\talphabeta\n\n\n\n     2\tgamma\n     3\tlast",
+        coreutilsText(cat(parseCommand('cat -bn a b c'), $base))
+    );
+    same(
+        "     1\talphabeta\n\n     2\tgamma\n     3\tlast",
+        coreutilsText(cat(parseCommand('cat -nbs a b c'), $base))
+    );
+    same(
+        "     1\talphabeta\n     2\t\n     3\tgamma\n     4\tlast",
+        coreutilsText(cat(parseCommand('cat --number --squeeze-blank a b c'), $base))
+    );
 });
 
 $tests['cat ends tabs CRLF and unterminated lines preserve the documented bytes'] = fn () => fixture(function ($base) {
     file_put_contents($base . '/file', "\n\n\talpha\r\n\r\nend\t");
     same("$\n$\n^Ialpha^M$\n^M$\nend^I", coreutilsText(cat(parseCommand('cat -ET file'), $base)));
-    same("$\n     1\t^Ialpha^M$\n     2\t^M$\n     3\tend^I",
-        coreutilsText(cat(parseCommand('cat --show-ends --show-tabs --number-nonblank --squeeze-blank file'), $base)));
+    same(
+        "$\n     1\t^Ialpha^M$\n     2\t^M$\n     3\tend^I",
+        coreutilsText(cat(parseCommand('cat --show-ends --show-tabs --number-nonblank --squeeze-blank file'), $base))
+    );
 });
 
 $tests['cat show-ends handles CRLF split across blocks files empty operands and final CR'] = fn () => fixture(function ($base) {
@@ -154,8 +164,10 @@ $tests['reading preserves delimiters crossing blocks and very long lines'] = fn 
         same($last, coreutilsText(tail(parseCommand('tail -n1 file'), $base)));
         same($first . "middle\n", coreutilsText(head(parseCommand('head -n-1 file'), $base)));
         same($last, coreutilsText(tail(parseCommand('tail -n+3 file'), $base)));
-        same("     1\t" . $first . "     2\tmiddle\n     3\t" . $last,
-            coreutilsText(cat(parseCommand('cat -n file'), $base)));
+        same(
+            "     1\t" . $first . "     2\tmiddle\n     3\t" . $last,
+            coreutilsText(cat(parseCommand('cat -n file'), $base))
+        );
     }
     file_put_contents($base . '/file', str_repeat("\n", 16390) . 'end');
     same("\nend", coreutilsText(tail(parseCommand('tail -n2 file'), $base)));
