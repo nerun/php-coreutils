@@ -31,6 +31,15 @@
 function coreutilsOptionDefinitions(string $command): array
 {
     $common = ['help' => [null, 'help', false]];
+    if ($command === 'echo') {
+        return [
+            'no-newline' => ['n', null, false],
+            'escapes' => ['e', null, false],
+            'literal' => ['E', null, false],
+            'version' => [null, 'version', false],
+            'posixly-correct' => [null, null, false],
+        ] + $common;
+    }
     if ($command === 'cat') {
         return [
             'number' => ['n', 'number', false],
@@ -131,6 +140,22 @@ function coreutilsOptionDefinitions(string $command): array
 
 function coreutilsHelp(string $command): string
 {
+    if ($command === 'echo') {
+        return "Usage: echo [SHORT-OPTION]... [STRING]... [> FILE | >> FILE]\n"
+            . "   or: echo --help | --version\n"
+            . "Join strings with spaces and append a newline by default.\n\n"
+            . "  -n          omit the trailing newline\n"
+            . "  -e          interpret backslash escapes\n"
+            . "  -E          keep backslash escapes literal (default; last -e/-E wins)\n"
+            . "  --help      show help when it is the sole argument\n"
+            . "  --version   identify this PHP implementation when it is the sole argument\n\n"
+            . 'Escapes: \\a \\b \\c \\e \\f \\n \\r \\t \\v \\\\ \\0NNN \\NNN \\xHH' . "\n"
+            . 'Octal uses up to 3 digits, hexadecimal up to 2; \\c stops all output.' . "\n"
+            . "Only leading clusters of n/e/E are options; -- and unknown options are text.\n"
+            . "Unquoted > overwrites; >> appends. Only one local regular-file target is supported.\n"
+            . "Quoted or escaped > characters are text. No shell is executed.\n"
+            . "POSIXLY_CORRECT enables escapes and restricts option recognition as in GNU echo.\n";
+    }
     if ($command === 'cat') {
         return "Usage: cat [OPTION]... FILE...\n"
             . "Concatenate local regular files in operand order.\n\n"

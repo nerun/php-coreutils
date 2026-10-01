@@ -114,6 +114,10 @@ function coreutilsFormatEntries(array $entries, array $settings, $formatter, arr
 function coreutilsText(array $result): string
 {
     $lines = array_column($result['errors'], 'message');
+    if ($result['command'] === 'echo') {
+        return ($lines ? implode("\n", $lines) . "\n" : '')
+            . ($result['data']['redirect'] === null ? $result['data']['content'] : '');
+    }
     if ($result['help'] !== null) {
         return implode("\n", $lines) . ($lines ? "\n" : '') . $result['help'];
     }

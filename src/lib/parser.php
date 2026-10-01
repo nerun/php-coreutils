@@ -31,9 +31,10 @@ require_once __DIR__ . '/errorHandling.php';
 require_once __DIR__ . '/options.php';
 
 /** Tokenize the supported quoting syntax; this does not execute or expand shell input. */
-function coreutilsTokenize(string $input): array
+function coreutilsTokenize(string $input, bool $redirect = false): array
 {
     $tokens = [];
+    $operators = [];
     $current = '';
     $started = false;
     $quote = null;
@@ -71,6 +72,21 @@ function coreutilsTokenize(string $input): array
                 continue;
             }
         }
+        if ($redirect && $quote === null && $char === '>') {
+            if ($started) {
+                $tokens[] = $current;
+                $current = '';
+                $started = false;
+            }
+            $operator = '>';
+            if ($i + 1 < $length && $input[$i + 1] === '>') {
+                $operator = '>>';
+                $i++;
+            }
+            $operators[count($tokens)] = true;
+            $tokens[] = $operator;
+            continue;
+        }
         if ($quote === null && strpos(" \t\r\n", $char) !== false) {
             if ($started) {
                 $tokens[] = $current;
@@ -88,7 +104,53 @@ function coreutilsTokenize(string $input): array
     if ($started) {
         $tokens[] = $current;
     }
-    return [$tokens, null];
+    return $redirect ? [$tokens, null, $operators] : [$tokens, null];
+}
+
+/** GNU echo accepts only leading clusters of n/e/E; other option-like words are text. */
+function coreutilsParseEcho(array $tokens, array $operators): array
+{
+    $parsed = ['command' => 'echo', 'options' => [], 'args' => [], 'errors' => []];
+    $words = [];
+    for ($i = 1, $count = count($tokens); $i < $count; $i++) {
+        if (!isset($operators[$i])) {
+            $words[] = $tokens[$i];
+            continue;
+        }
+        if (isset($parsed['redirect'])) {
+            $parsed['errors'][] = coreutilsError('echo', 'invalid-redirection', 'only one output redirection is supported');
+            return $parsed;
+        }
+        if ($i + 1 >= $count || isset($operators[$i + 1])) {
+            $parsed['errors'][] = coreutilsError('echo', 'missing-redirect-path', 'output redirection requires a file');
+            return $parsed;
+        }
+        $mode = $tokens[$i] === '>>' ? 'append' : 'overwrite';
+        $parsed['redirect'] = ['path' => $tokens[++$i], 'mode' => $mode];
+    }
+    $posix = getenv('POSIXLY_CORRECT') !== false;
+    $parsed['options']['posixly-correct'] = $posix;
+    if (!$posix && count($words) === 1 && in_array($words[0], ['--help', '--version'], true)) {
+        $parsed['options'][substr($words[0], 2)] = true;
+        return $parsed;
+    }
+    $index = 0;
+    if (!$posix || ($words[0] ?? null) === '-n') {
+        while ($index < count($words)) {
+            $word = $words[$index];
+            if (strlen($word) < 2 || $word[0] !== '-' || strspn($word, 'neE', 1) !== strlen($word) - 1) {
+                break;
+            }
+            foreach (str_split(substr($word, 1)) as $flag) {
+                $name = ['n' => 'no-newline', 'e' => 'escapes', 'E' => 'literal'][$flag];
+                unset($parsed['options'][$name]);
+                $parsed['options'][$name] = true;
+            }
+            $index++;
+        }
+    }
+    $parsed['args'] = array_slice($words, $index);
+    return $parsed;
 }
 
 /** Return canonical input; find retains repeated predicates, other commands use the last alias. */
@@ -100,6 +162,12 @@ function parseCommand(string $input): array
     if ($error !== null || $command === '') {
         $parsed['errors'][] = coreutilsError('parser', 'syntax-error', $error ?? 'missing command');
         return $parsed;
+    }
+    if (str_starts_with($command, 'echo')) {
+        [$echoTokens, , $operators] = coreutilsTokenize($input, true);
+        if (($echoTokens[0] ?? null) === 'echo') {
+            return coreutilsParseEcho($echoTokens, $operators);
+        }
     }
     $definitions = coreutilsOptionDefinitions($command);
     if (!$definitions) {
@@ -230,7 +298,7 @@ function coreutilsValidateInput(string $command, array $input): array
             $errors[] = coreutilsError($command, 'invalid-value', "invalid value for option '$name'");
         }
     }
-    $pathText = in_array($command, ['basename', 'dirname'], true);
+    $pathText = in_array($command, ['basename', 'dirname', 'echo'], true);
     foreach ($args as $arg) {
         if ($pathText) {
             if (!is_string($arg) || strpos($arg, "\0") !== false) {
@@ -238,13 +306,25 @@ function coreutilsValidateInput(string $command, array $input): array
             }
             continue;
         }
-        if (!is_string($arg) || $arg === '' || strpos($arg, "\0") !== false) {
-            $errors[] = coreutilsError($command, 'invalid-path', 'paths must be nonempty strings without NUL bytes');
-        } elseif (preg_match('~^[a-zA-Z][a-zA-Z0-9+.-]*://~', $arg)) {
-            $errors[] = coreutilsError($command, 'invalid-path', 'only local filesystem paths are supported', $arg);
-        } elseif (DIRECTORY_SEPARATOR === '\\' && preg_match('~^[a-zA-Z]:(?![/\\\\])~', $arg)) {
-            $errors[] = coreutilsError($command, 'invalid-path', 'drive-relative paths are not supported', $arg);
+        $error = coreutilsValidateLocalPath($command, $arg);
+        if ($error !== null) {
+            $errors[] = $error;
         }
     }
     return [$options, array_values($args), $errors];
+}
+
+/** Reuse filesystem-path validation for operands and echo's output target. */
+function coreutilsValidateLocalPath(string $command, $path): ?array
+{
+    if (!is_string($path) || $path === '' || strpos($path, "\0") !== false) {
+        return coreutilsError($command, 'invalid-path', 'paths must be nonempty strings without NUL bytes');
+    }
+    if (preg_match('~^[a-zA-Z][a-zA-Z0-9+.-]*://~', $path)) {
+        return coreutilsError($command, 'invalid-path', 'only local filesystem paths are supported', $path);
+    }
+    if (DIRECTORY_SEPARATOR === '\\' && preg_match('~^[a-zA-Z]:(?![/\\\\])~', $path)) {
+        return coreutilsError($command, 'invalid-path', 'drive-relative paths are not supported', $path);
+    }
+    return null;
 }

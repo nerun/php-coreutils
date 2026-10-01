@@ -425,6 +425,7 @@ require __DIR__ . '/pwd.php';
 require __DIR__ . '/pathnames.php';
 require __DIR__ . '/touch.php';
 require __DIR__ . '/reading.php';
+require __DIR__ . '/echo.php';
 
 $passed = $failed = $skipped = 0;
 foreach ($tests as $name => $test) {
