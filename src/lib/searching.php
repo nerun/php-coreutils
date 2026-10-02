@@ -328,8 +328,12 @@ function coreutilsGrepPaths(array $args, string $base, array $settings, array &$
                 }
                 if (isset($active[$identity])) {
                     // Keep cycle diagnostics separate from filesystem errors, as GNU grep does.
-                    $result['data']['warnings'][] = coreutilsError('grep', 'directory-cycle',
-                        "recursive directory loop at '" . $entry['name'] . "'", $entry['name']);
+                    $result['data']['warnings'][] = coreutilsError(
+                        'grep',
+                        'directory-cycle',
+                        "recursive directory loop at '" . $entry['name'] . "'",
+                        $entry['name']
+                    );
                     continue;
                 }
                 $children = coreutilsFsCall(fn () => scandir($path, SCANDIR_SORT_ASCENDING), $warning);
