@@ -105,8 +105,12 @@ function coreutilsDuBytes(array $stat, bool $apparent, string $name, array &$res
     $value = $apparent ? ($stat['size'] ?? null) : ($stat['blocks'] ?? null);
     $factor = $apparent ? 1 : 512;
     if (!is_int($value) || $value < 0) {
-        coreutilsAddError($result, coreutilsError('du', 'size-unavailable',
-            "size metadata unavailable for '$name'" . ($apparent ? '' : '; use --apparent-size'), $name));
+        coreutilsAddError($result, coreutilsError(
+            'du',
+            'size-unavailable',
+            "size metadata unavailable for '$name'" . ($apparent ? '' : '; use --apparent-size'),
+            $name
+        ));
         return null;
     }
     if ($value > intdiv(PHP_INT_MAX, $factor)) {

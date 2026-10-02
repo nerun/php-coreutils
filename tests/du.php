@@ -86,14 +86,18 @@ $tests['du allocated counts use stat blocks including directory allocation'] = f
     file_put_contents($base . '/tree/file', 'small');
     $file = lstat($base . '/tree/file');
     $directory = lstat($base . '/tree');
-    skipUnless(isset($file['blocks'], $directory['blocks']) && $file['blocks'] >= 0 && $directory['blocks'] >= 0,
-        'allocated block metadata is unavailable');
+    skipUnless(
+        isset($file['blocks'], $directory['blocks']) && $file['blocks'] >= 0 && $directory['blocks'] >= 0,
+        'allocated block metadata is unavailable'
+    );
     $result = du(parseCommand('du -ac tree'), $base);
     same(0, $result['status']);
     same($file['blocks'] * 512, $result['data']['entries'][0]['bytes']);
     same(($file['blocks'] + $directory['blocks']) * 512, $result['data']['total']);
-    same((string) (intdiv($result['data']['total'], 1024) + ($result['data']['total'] % 1024 ? 1 : 0)) . "\ttotal\n",
-        substr(coreutilsText($result), strrpos(rtrim(coreutilsText($result)), "\n") + 1));
+    same(
+        (string) (intdiv($result['data']['total'], 1024) + ($result['data']['total'] % 1024 ? 1 : 0)) . "\ttotal\n",
+        substr(coreutilsText($result), strrpos(rtrim(coreutilsText($result)), "\n") + 1)
+    );
 });
 
 $tests['du sparse apparent size does not require reading contents'] = fn () => fixture(function ($base) {
