@@ -201,6 +201,22 @@ function coreutilsText(array $result): string
     if ($result['help'] !== null) {
         return implode("\n", $lines) . ($lines ? "\n" : '') . $result['help'];
     }
+    if ($result['command'] === 'grep') {
+        $errors = $result['errors'];
+        $warnings = $result['data']['warnings'];
+        if ($result['options']['no-messages'] ?? false) {
+            $errors = array_filter($errors, fn ($error) => !in_array($error['code'], ['filesystem-error', 'invalid-cwd'], true));
+            $warnings = [];
+        }
+        $diagnostics = array_column(array_merge($errors, $warnings), 'message');
+        $output = $diagnostics ? implode("\n", $diagnostics) . "\n" : '';
+        if (!$result['data']['streamed']) {
+            foreach ($result['data']['entries'] as $entry) {
+                $output .= $entry['content'];
+            }
+        }
+        return $output;
+    }
     if ($result['command'] === 'du') {
         $output = $lines ? implode("\n", $lines) . "\n" : '';
         $separator = ($result['options']['null'] ?? false) ? "\0" : "\n";

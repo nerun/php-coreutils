@@ -12,7 +12,7 @@ The goal is practical, predictable behavior: do one thing well, keep interfaces
 simple, and let applications compose the returned data. This is a library, not
 a shell emulator or a complete GNU Coreutils replacement.
 
-Currently implemented: **ls**, **mkdir**, **mv**, **cp**, **rm**, **rmdir**, **find**, **pwd**, **basename**, **dirname**, **touch**, **cat**, **head**, **tail**, **echo**, **chmod**, **stat** and **du**.
+Currently implemented: **ls**, **mkdir**, **mv**, **cp**, **rm**, **rmdir**, **find**, **pwd**, **basename**, **dirname**, **touch**, **cat**, **head**, **tail**, **echo**, **chmod**, **stat**, **du** and **grep**.
 
 ## Requirements
 
@@ -41,7 +41,7 @@ require_once __DIR__ . '/php-coreutils/src/bootstrap.php';
 Alternatively, include each command file (`src/ls.php`, `src/mkdir.php`, `src/mv.php`,
 `src/cp.php`, `src/rm.php`, `src/rmdir.php`, `src/find.php`, `src/pwd.php`,
 `src/basename.php`, `src/dirname.php`, `src/touch.php`, `src/cat.php`,
-`src/head.php`, `src/tail.php`, `src/echo.php`, `src/chmod.php`, `src/stat.php` or `src/du.php`)
+`src/head.php`, `src/tail.php`, `src/echo.php`, `src/chmod.php`, `src/stat.php`, `src/du.php` or `src/grep.php`)
 individually. For text or
 HTML formatting, also include `src/lib/format.php`.
 
@@ -69,7 +69,7 @@ if ($result['status'] !== 0) {
 collisions with the corresponding native PHP functions.
 `_echo()` avoids a collision with PHP's `echo` language construct.
 No command prints anything on its own.
-`cat()`, `head()` and `tail()` also accept an optional third argument: a callback
+`cat()`, `head()`, `tail()` and `grep()` also accept an optional third argument: a callback
 that receives output blocks instead of accumulating their content in the result.
 
 For a web interface, use the HTML formatter. It escapes the entire output,
@@ -108,8 +108,8 @@ Every command returns an array with these keys:
 
 | Key | Meaning |
 | --- | --- |
-| `command` | `ls`, `mkdir`, `mv`, `cp`, `rm`, `rmdir`, `find`, `pwd`, `basename`, `dirname`, `touch`, `cat`, `head`, `tail`, `echo`, `chmod`, `stat` or `du`. |
-| `status` | `0`: success; `1`: filesystem error, possibly with partial success; `2`: invalid input. |
+| `command` | `ls`, `mkdir`, `mv`, `cp`, `rm`, `rmdir`, `find`, `pwd`, `basename`, `dirname`, `touch`, `cat`, `head`, `tail`, `echo`, `chmod`, `stat`, `du` or `grep`. |
+| `status` | `0`: success; `1`: filesystem error, possibly with partial success; `2`: invalid input. `grep` uses its conventional search statuses, described below. |
 | `data` | Structured results described below. Names and sizes are never HTML-escaped or preformatted. |
 | `errors` | Errors containing `code`, `message`, and `path` (which can be `null`). |
 | `options` | Validated canonical options. |
@@ -183,11 +183,25 @@ Every command returns an array with these keys:
   `data.settings` records `apparent`, `links`, `max-depth`, `format`, `block-size`
   and `suffix`. Sizes remain raw byte counts, regardless of display units.
 
+* `grep`: `data.entries` contains each opened search file with `name`, `path`,
+  `content` (output bytes, or `null` with a callback), `bytes` (accepted output
+  bytes), `complete`, `matches` (selected records found before stopping),
+  `scanned` (records examined), and `binary` (NUL classification when enabled).
+  `complete: true` includes a successful early stop by `-m`, `-l`, `-L` or `-q`;
+  it does not imply that the entire file was matched. `data.matched` indicates
+  whether any selected record was found, `data.streamed` identifies callback
+  delivery, and `data.settings` records the resolved search/output policies.
+  `data.warnings` contains nonfatal directory-cycle diagnostics.
+  Status is **0** for selected records, **1** for none, and **2** for any error.
+  With `-q`, a selected record overrides earlier input-file errors; those errors
+  remain available in `errors`. Errors reading pattern files remain status 2.
+
 Syntax and option errors are checked before filesystem changes. Filesystem
 errors do not roll back earlier changes: remaining operands are still tried.
 A directory can appear in `created` even if applying its explicit mode failed;
 check `status` and `errors`. These status codes are the library contract, not a
-promise of exact GNU exit-status compatibility.
+promise of exact GNU exit-status compatibility. `grep` is the exception to the
+general status scheme: no match is status 1 without an error.
 
 `coreutilsText($result)` returns presentation text, including diagnostics.
 `coreutilsHtml($result)` returns that text escaped inside a `<pre>` element.
@@ -252,6 +266,32 @@ Applications needing separate output/error channels should use `data` and
 | chmod | `-c`, `--changes` | `changes` |
 | chmod | `--reference FILE`, `--reference=FILE` | `reference` |
 | chmod | Canonical array only (or first command-string operand) | `mode` |
+| grep | `-G`, `--basic-regexp` | `basic-regexp` |
+| grep | `-E`, `--extended-regexp` | `extended-regexp` |
+| grep | `-F`, `--fixed-strings` | `fixed-strings` |
+| grep | `-e PATTERNS`, `--regexp=PATTERNS` | `regexp` |
+| grep | `-f FILE`, `--file=FILE` | `file` |
+| grep | `-i`, `--ignore-case` | `ignore-case` |
+| grep | `--no-ignore-case` | `no-ignore-case` |
+| grep | `-v`, `--invert-match` | `invert-match` |
+| grep | `-w`, `--word-regexp` | `word-regexp` |
+| grep | `-x`, `--line-regexp` | `line-regexp` |
+| grep | `-n`, `--line-number` | `line-number` |
+| grep | `-c`, `--count` | `count` |
+| grep | `-l`, `--files-with-matches` | `files-with-matches` |
+| grep | `-L`, `--files-without-match` | `files-without-match` |
+| grep | `-q`, `--quiet` | `quiet` |
+| grep | `--silent` (alias for `-q`) | `silent` |
+| grep | `-s`, `--no-messages` | `no-messages` |
+| grep | `-H`, `--with-filename` | `with-filename` |
+| grep | `-h`, `--no-filename` | `no-filename` |
+| grep | `-m NUM`, `--max-count=NUM` | `max-count` |
+| grep | `-r`, `--recursive` | `recursive` |
+| grep | `-R`, `--dereference-recursive` | `dereference-recursive` |
+| grep | `-a`, `--text` | `text` |
+| grep | `-I` | `binary-without-match` |
+| grep | `--binary-files=TYPE` | `binary-files` |
+| grep | `-z`, `--null-data` | `null-data` |
 | du | `-a`, `--all` | `all` |
 | du | `-s`, `--summarize` | `summarize` |
 | du | `-c`, `--total` | `total` |
@@ -546,6 +586,154 @@ $result = _echo([
     'redirect' => ['path' => 'arquivo.txt', 'mode' => 'append'],
 ], __DIR__);
 ```
+
+## Searching file contents
+
+```php
+echo coreutilsText(grep(parseCommand('grep -n "error" application.log'), __DIR__));
+echo coreutilsText(grep(parseCommand('grep -Ei "warning|error" application.log'), __DIR__));
+echo coreutilsText(grep(parseCommand('grep -rF "TODO" src'), __DIR__));
+echo coreutilsText(grep(parseCommand('grep -e "error" -e "warning" application.log'), __DIR__));
+echo coreutilsText(grep(parseCommand('grep -f patterns.txt application.log'), __DIR__));
+
+$result = grep([
+    'args' => ['application.log'],
+    'options' => ['regexp' => ['error', 'warning'], 'ignore-case' => true],
+], __DIR__);
+
+if ($result['status'] === 0) {
+    // Selected records were found.
+} elseif ($result['status'] === 1) {
+    // The search completed without selected records.
+} else {
+    // Invalid input, filesystem error, regex execution failure or refused output.
+}
+```
+
+`grep()` searches local regular files using the shared safe-opening and output
+helpers from `cat`, `head` and `tail`. It opens files in binary mode, scans in
+8192-byte blocks and retains only the current record while matching. Buffered
+results consume memory proportional to output as well as the longest record;
+an optional third-argument callback avoids accumulating output:
+
+```php
+$result = grep(parseCommand('grep -n "error" application.log'), __DIR__,
+    function (string $block, array $file) {
+        echo $block; // $file contains name and absolute path.
+    }
+);
+```
+
+With a callback, `content` is `null`, `bytes` counts accepted blocks, and
+`coreutilsText()` returns only diagnostics. Returning `false` stops the entire
+search with status 2 and `output-error`; a thrown exception propagates. Opened
+handles are closed in either case. Callback blocks can contain a complete long
+record; the 8192-byte limit applies to reads, not output blocks. The callback
+owns encoding, HTML escaping and flushing.
+
+### Patterns and matching
+
+The default syntax is basic regular expressions (`-G`); `-E` selects extended
+expressions and `-F` selects literal byte strings. Conflicting matcher flags are
+errors. Literal matching uses string search and does not depend on PCRE limits.
+Regular expressions are translated to PHP's PCRE engine, never passed through
+as Perl patterns. Matching is byte-oriented; there is no Unicode mode or locale
+management. Case-insensitive matching targets ASCII; `-w` treats ASCII letters,
+digits and `_` as word characters. `-x` matches the entire record and takes
+precedence over `-w` when both are set.
+
+Supported regular-expression constructs include `.`, anchors, bracket ranges,
+negated brackets, the standard POSIX character classes, groups, alternation,
+`*`, `+`, `?`, and repetition intervals up to 32767. In BRE, groups, alternation,
+`+`, `?` and interval braces use backslashes; their unescaped forms are literal.
+BRE anchors are special only at the beginning/end of a branch; leading `*`,
+`\+` and `\?` are literal. Backreferences `\1` through `\9` and GNU word
+operators `\w`, `\W`, `\s`, `\S`, `\b`, `\B`, `\<` and `\>` are supported.
+GNU `` \` `` and `\'` anchor the beginning and end of the record. Unknown escaped
+letters are literals: `\d` means the letter `d`, not a digit class.
+
+Perl group extensions, collating symbols, equivalence classes, unknown character
+classes, unmatched parentheses, and misplaced/repeated ERE quantifiers are
+rejected. These restrictions intentionally exclude GNU's acceptance of some
+malformed expressions. PCRE size, nesting, backtracking and runtime limits can
+also produce status 2. Regex failures are captured as result errors rather than
+leaking PHP warnings. The application's PCRE settings are left unchanged.
+
+Patterns can contain newlines, which split them into alternatives. Repeated
+`-e` and `-f` sources also combine with OR; `-v` negates their combined match.
+An empty pattern matches every record. An empty pattern file supplies no
+patterns, so it matches nothing (or every record with `-v`). Blank pattern-file
+lines supply empty patterns. A final pattern-file newline adds no extra empty
+pattern; CR bytes remain literal, including in CRLF pattern files. Pattern files
+must be local regular files; NUL bytes in patterns are rejected.
+
+When neither `-e` nor `-f` is supplied, the first operand is the pattern and the
+rest are files. With either option, all operands are filenames. Canonical
+`regexp` and `file` options accept a string or a nonempty array of strings.
+Use `--` before a positional pattern or filename beginning with `-`.
+No shell expansion is performed.
+
+### Output and search status
+
+Newline is the default record delimiter; `-z` changes it to NUL. A final record
+without a delimiter is still searched and selected output gains the delimiter.
+CR is preserved. With `-z`, embedded newlines are ordinary record bytes, and
+regex dots can match them. Counts and filename-only output still end in newline.
+
+`-n` numbers examined records from 1 in each file. Filename prefixes are automatic
+for multiple operands and files found through directory recursion. `-H` forces
+them and `-h` suppresses them; the last prefix flag wins. A single explicit file
+still has no automatic prefix when `-r` is enabled.
+
+`-c` prints the number of selected records per file, including zero. `-l` lists
+files with selected records; `-L` lists files without any. The last `-l`/`-L`
+flag wins and overrides `-c`. Both filename modes stop matching a file as soon
+as a selected record is found. As in GNU grep, exit status tracks selected
+records even with `-L`: listing a nonmatching file alone returns status 1.
+`-q` suppresses normal output and stops the entire search after a selected
+record, returning status 0 even if earlier input-file errors were recorded.
+Other successful matches do not mask errors: normal partial searches return 2.
+`-s` suppresses filesystem diagnostics and cycle warnings in presentation;
+validation, regex and callback errors remain visible, and all errors remain in
+the result. Normal output, including binary-match notices, is unaffected.
+
+`-m` limits selected records per file, including when inverted by `-v`. It accepts
+a nonnegative integer fitting in PHP's integer range (an optional `+` is allowed).
+Negative GNU counts are not supported. With `-m0`, ordinary searches do not
+traverse input files; filename-without-match mode still opens the selected files.
+Pattern files and syntax are always validated first.
+
+### Recursion and binary data
+
+`-r` recursively scans byte-sorted directory entries, including hidden files.
+Explicit symbolic-link operands are followed, while nested links are skipped.
+`-R` also follows nested links and takes precedence over `-r` regardless of order.
+Directory cycles are skipped and recorded in `data.warnings`, without making
+an otherwise successful search fail. Broken followed links are errors. Recursive
+searches skip special files; explicit FIFOs, devices, sockets and directories
+without recursion are refused before opening them. No input can make the search
+wait for a FIFO writer. Repeated paths and hard links are searched independently.
+
+Without file operands, recursive searches start in `.`; displayed child names
+omit the implicit `./` prefix. Nonrecursive searches require file operands.
+`-` is always a literal filename: standard input is not supported.
+
+By default, a file containing NUL bytes is treated as binary. Classification
+checks the file before emitting records, rather than depending on which block
+happens to be buffered. For binary matching, both NUL and newline delimit records;
+selected detail is suppressed and the formatter produces a binary-match notice.
+`-c`, `-l`, `-L` and `-q` retain their output policies. `-a` or
+`--binary-files=text` searches all bytes as ordinary text; `-I` or
+`--binary-files=without-match` treats a NUL-containing file as having no selected
+records, including with `-v`. The last binary policy wins. `-z` disables binary
+classification because NUL is the explicit record delimiter. High bytes alone
+do not classify a file as binary. Notices are included in formatted presentation
+and callback output; the library does not separate stdout from stderr.
+
+The implementation omits `-P`, `-o`, context lines, color, byte offsets, filename
+NUL terminators, include/exclude filters and standard-input streams. Files are
+snapshots; concurrent changes can cause partial results or a read error. No shell
+or external process is executed.
 
 ## Reading files
 
@@ -1010,19 +1198,6 @@ Filesystem access remains subject to the PHP account's permissions and hosting
 restrictions. The working directory is not a sandbox boundary: applications
 must enforce their own allowed-path policy when accepting untrusted requests.
 
-## Migration from the initial implementation
-
-* Replace `ls($input)` used for immediate output with
-  `echo coreutilsHtml(ls($input, $cwd))` in web pages, or use `coreutilsText()`.
-* Pass the same explicit `$cwd` to all commands. They no longer read
-  `$_SESSION['cwd']`.
-* `parseCommand()` now returns canonical `options`, replacing `flags`,
-  `longFlags`, and `flagsWithValue`. Reparse stored command strings or migrate
-  manually constructed arrays; obsolete fields are rejected rather than ignored.
-* Inspect the returned status/errors instead of relying on echoed diagnostics.
-* Internal printing helpers, error constants, `setAppLocale()` and
-  `CURRENT_LOCALE` have been replaced by side-effect-free helpers.
-
 ## Tests
 
 ```sh
@@ -1034,7 +1209,8 @@ The suite has no external dependencies. It covers parsing, paths, permissions,
 links, totals, HTML escaping, partial failures, reading boundaries, binary output,
 callback cleanup, echo byte escapes, output redirection, symbolic modes, recursive
 permission changes, metadata formatting, disk usage, sparse files, hard-link
-deduplication, depth selection and repeated calls. Unsupported
+deduplication, depth selection, grep pattern grammars, search status, recursive
+searches, binary records and repeated calls. Unsupported
 permission/symlink checks are reported as skipped, including when a runtime
 cannot enforce Unix permissions or the process can bypass them. A failure exits
 with status 1. Run on native PHP to validate actual operating-system semantics.

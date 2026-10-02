@@ -153,7 +153,7 @@ function coreutilsParseEcho(array $tokens, array $operators): array
     return $parsed;
 }
 
-/** Return canonical input; find retains repeated predicates, other commands use the last alias. */
+/** Return canonical input; find predicates and grep pattern sources retain repeated values. */
 function parseCommand(string $input): array
 {
     [$tokens, $error] = coreutilsTokenize($input);
@@ -238,8 +238,9 @@ function parseCommand(string $input): array
                     $value = $tokens[++$i];
                 }
             }
-            if ($command === 'find' && in_array($name, ['type', 'name'], true)) {
-                $findPredicates = true;
+            if (($command === 'find' && in_array($name, ['type', 'name'], true))
+                || ($command === 'grep' && in_array($name, ['regexp', 'file'], true))) {
+                $findPredicates = $command === 'find';
                 if (array_key_exists($name, $parsed['options'])) {
                     $previous = (array) $parsed['options'][$name];
                     $previous[] = $value;
@@ -283,7 +284,8 @@ function coreutilsValidateInput(string $command, array $input): array
     foreach ($options as $name => $value) {
         if (!isset($definitions[$name])) {
             $errors[] = coreutilsError($command, 'invalid-option', "invalid option '$name'");
-        } elseif ($command === 'find' && in_array($name, ['type', 'name'], true)) {
+        } elseif (($command === 'find' && in_array($name, ['type', 'name'], true))
+            || ($command === 'grep' && in_array($name, ['regexp', 'file'], true))) {
             $values = is_array($value) ? $value : [$value];
             if (!$values) {
                 $errors[] = coreutilsError($command, 'invalid-value', "option '$name' requires at least one value");
@@ -299,8 +301,11 @@ function coreutilsValidateInput(string $command, array $input): array
         }
     }
     $pathText = in_array($command, ['basename', 'dirname', 'echo'], true);
+    $argumentIndex = 0;
     foreach ($args as $arg) {
-        if ($pathText) {
+        $patternText = $command === 'grep' && $argumentIndex++ === 0
+            && !isset($options['regexp']) && !isset($options['file']);
+        if ($pathText || $patternText) {
             if (!is_string($arg) || strpos($arg, "\0") !== false) {
                 $errors[] = coreutilsError($command, 'invalid-path', 'operands must be strings without NUL bytes');
             }

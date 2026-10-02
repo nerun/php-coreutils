@@ -31,6 +31,36 @@
 function coreutilsOptionDefinitions(string $command): array
 {
     $common = ['help' => [null, 'help', false]];
+    if ($command === 'grep') {
+        return [
+            'basic-regexp' => ['G', 'basic-regexp', false],
+            'extended-regexp' => ['E', 'extended-regexp', false],
+            'fixed-strings' => ['F', 'fixed-strings', false],
+            'regexp' => ['e', 'regexp', true],
+            'file' => ['f', 'file', true],
+            'ignore-case' => ['i', 'ignore-case', false],
+            'no-ignore-case' => [null, 'no-ignore-case', false],
+            'invert-match' => ['v', 'invert-match', false],
+            'word-regexp' => ['w', 'word-regexp', false],
+            'line-regexp' => ['x', 'line-regexp', false],
+            'line-number' => ['n', 'line-number', false],
+            'count' => ['c', 'count', false],
+            'files-with-matches' => ['l', 'files-with-matches', false],
+            'files-without-match' => ['L', 'files-without-match', false],
+            'quiet' => ['q', 'quiet', false],
+            'silent' => [null, 'silent', false],
+            'no-messages' => ['s', 'no-messages', false],
+            'with-filename' => ['H', 'with-filename', false],
+            'no-filename' => ['h', 'no-filename', false],
+            'max-count' => ['m', 'max-count', true],
+            'recursive' => ['r', 'recursive', false],
+            'dereference-recursive' => ['R', 'dereference-recursive', false],
+            'text' => ['a', 'text', false],
+            'binary-without-match' => ['I', null, false],
+            'binary-files' => [null, 'binary-files', true],
+            'null-data' => ['z', 'null-data', false],
+        ] + $common;
+    }
     if ($command === 'du') {
         return [
             'all' => ['a', 'all', false],
@@ -178,6 +208,36 @@ function coreutilsOptionDefinitions(string $command): array
 
 function coreutilsHelp(string $command): string
 {
+    if ($command === 'grep') {
+        return "Usage: grep [OPTION]... PATTERNS FILE...\n"
+            . "   or: grep [OPTION]... -e PATTERNS | -f PATTERN_FILE [FILE]...\n"
+            . "Search local regular files; recursive searches default to .\n\n"
+            . "  -G / -E / -F           basic regex (default), extended regex, fixed strings\n"
+            . "  -e, --regexp PATTERNS  add patterns; repeated values combine with OR\n"
+            . "  -f, --file FILE        read newline-separated patterns from a local file\n"
+            . "  -i, --ignore-case      ignore ASCII case; --no-ignore-case cancels it\n"
+            . "  -v, --invert-match     select records matching none of the patterns\n"
+            . "  -w, --word-regexp      require ASCII word boundaries\n"
+            . "  -x, --line-regexp      require a whole-record match\n"
+            . "  -n, --line-number      prefix selected records with their number\n"
+            . "  -c, --count            print selected-record counts per file\n"
+            . "  -l / -L                list files with / without selected records\n"
+            . "  -q, --quiet, --silent  stop silently after the first selected record\n"
+            . "  -s, --no-messages      suppress access diagnostics, retaining errors in the result\n"
+            . "  -H / -h                force / suppress filename prefixes\n"
+            . "  -m, --max-count NUM    stop after NUM selected records per file\n"
+            . "  -r / -R                recurse; -R also follows nested symbolic links\n"
+            . "  -a / -I                treat binary files as text / without matches\n"
+            . "      --binary-files TYPE  binary (default), text, without-match\n"
+            . "  -z, --null-data        use NUL instead of newline as the record delimiter\n"
+            . "      --help             show this help\n"
+            . "      --                 end options; - is a literal filename\n\n"
+            . "Patterns may contain newlines; -e and -f values may be repeated.\n"
+            . "Status: 0 selected records, 1 none, 2 error; -q success overrides earlier errors.\n"
+            . "Binary classification checks NUL bytes; regex matching is byte-oriented, not Unicode.\n"
+            . "BRE/ERE translation supports groups, alternatives, intervals, backreferences and POSIX classes.\n"
+            . "Perl extensions, collating symbols, context, color, -o and stdin are not supported.\n";
+    }
     if ($command === 'du') {
         return "Usage: du [OPTION]... [FILE]...\n"
             . "Estimate space usage recursively; the default operand is .\n\n"

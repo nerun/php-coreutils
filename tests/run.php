@@ -428,6 +428,7 @@ require __DIR__ . '/reading.php';
 require __DIR__ . '/echo.php';
 require __DIR__ . '/attributes.php';
 require __DIR__ . '/du.php';
+require __DIR__ . '/grep.php';
 
 $passed = $failed = $skipped = 0;
 foreach ($tests as $name => $test) {
